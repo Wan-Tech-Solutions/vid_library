@@ -17,7 +17,7 @@ class AdminUserSeeder extends Seeder
         User::firstOrCreate(
             ['email' => 'sule.aktious@gmail.com'],
             [
-                'name' => 'Admin',
+                'name' => 'akatious',
                 'password' => bcrypt('22Secured'),
                 'role' => 'superadmin',
             ]
