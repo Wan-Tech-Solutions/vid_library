@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('videos', function (Blueprint $table) {
-            $video->thumbnail_path = $request->file('thumbnail')->store('thumbnails', 'public');
+            $table->string('thumbnail_path')->nullable()->after('video_path');
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('videos', function (Blueprint $table) {
-            //
+            $table->dropColumn('thumbnail_path');
         });
     }
 };
