@@ -239,20 +239,20 @@
             </div>
         </section>
     </div>
+    @include('partials.footer')
 @endsection
 
-<!-- Alpine.js -->
-<!-- Font for icons if using SVGs is too bulky -->
-<script src="//unpkg.com/alpinejs" defer></script>
-<script src="https://unpkg.com/@popperjs/core@2"></script>
-<script src="https://unpkg.com/tippy.js@6"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        tippy('[data-tippy-content]', {
-            placement: 'top',
-            animation: 'shift-away',
-            theme: 'light-border',
+@push('scripts')
+    <script src="//unpkg.com/alpinejs" defer></script>
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            tippy('[data-tippy-content]', {
+                placement: 'top',
+                animation: 'shift-away',
+                theme: 'light-border',
+            });
         });
-    });
-</script>
-@include('partials.footer')
+    </script>
+@endpush
