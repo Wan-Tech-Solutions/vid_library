@@ -46,6 +46,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/account/change-password', [AccountController::class, 'updatePassword'])->name('account.password.update');
 
     // Video Routes
+    Route::post('/videos/uploads/chunk', [VideoController::class, 'uploadChunk'])->name('videos.uploadChunk');
+    Route::post('/videos/uploads/cancel', [VideoController::class, 'cancelUpload'])->name('videos.cancelUpload');
+    Route::get('/videos/uploads/status/{uploadId}', [VideoController::class, 'uploadStatus'])->name('videos.uploadStatus');
     Route::resource('videos', VideoController::class);
     Route::post('/videos/{id}/toggle-publish', [VideoController::class, 'togglePublish'])->name('videos.togglePublish');
 });

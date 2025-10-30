@@ -53,29 +53,33 @@
                                 <div
                                     class="relative group w-[160px] h-[90px] overflow-hidden rounded shadow bg-gray-100 dark:bg-gray-800">
                                     @php
-                                        $thumbPath = 'storage/' . $video->thumbnail_path;
-                                        $videoPath = 'storage/' . $video->video_path;
+                                        $thumbUrl = media_url($video->thumbnail_path);
+                                        $videoUrl = media_url($video->video_path);
+                                        $hasThumbnail = (bool) $thumbUrl;
+                                        $videoClasses = 'absolute top-0 left-0 w-full h-full object-cover rounded transition-opacity duration-300';
+                                        $videoClasses .= $hasThumbnail
+                                            ? ' opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto'
+                                            : ' opacity-100';
+                                        $showFallback = ! $thumbUrl && ! $videoUrl;
                                     @endphp
 
                                     {{-- Show thumbnail --}}
-                                    @if ($video->thumbnail_path && file_exists(public_path($thumbPath)))
-                                        <img src="{{ asset($thumbPath) }}" alt="Thumbnail"
-                                            class="w-full h-full object-cover rounded transition-opacity duration-300 group-hover:opacity-0" />
+                                    @if ($thumbUrl)
+                                        <img src="{{ $thumbUrl }}" alt="Thumbnail"
+                                            class="w-full h-full object-cover rounded transition-opacity duration-300 group-hover:opacity-0"
+                                            onerror="const container=this.parentElement; this.remove(); const videoEl=container.querySelector('video'); if(videoEl){ videoEl.classList.remove('opacity-0','pointer-events-none'); videoEl.classList.add('opacity-100'); } const fallbackEl=container.querySelector('[data-fallback]'); if(fallbackEl){ fallbackEl.classList.remove('hidden'); }" />
                                     @endif
 
                                     {{-- Auto-play video preview on hover --}}
-                                    @if ($video->video_path && file_exists(public_path($videoPath)))
-                                        <video src="{{ asset($videoPath) }}" muted playsinline preload="metadata"
-                                            class="absolute top-0 left-0 w-full h-full object-cover rounded hidden group-hover:block group-hover:opacity-100 transition-opacity duration-300"></video>
+                                    @if ($videoUrl)
+                                        <video src="{{ $videoUrl }}" muted playsinline preload="metadata"
+                                            class="{{ $videoClasses }}" @if ($thumbUrl) poster="{{ $thumbUrl }}" @endif></video>
                                     @endif
 
-                                    {{-- Fallback if neither thumbnail nor video exists --}}
-                                    @if (!$video->thumbnail_path && !$video->video_path)
-                                        <div
-                                            class="w-full h-full flex items-center justify-center text-gray-500 text-xs italic">
-                                            No Preview
-                                        </div>
-                                    @endif
+                                    <div data-fallback
+                                        class="absolute inset-0 flex items-center justify-center text-gray-500 text-xs italic {{ $showFallback ? '' : 'hidden' }}">
+                                        No Preview
+                                    </div>
                                 </div>
                             </td>
 

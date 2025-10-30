@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'ffmpeg' => [
+        'ffmpeg' => env('FFMPEG_PATH'),
+        'ffprobe' => env('FFPROBE_PATH'),
+        'timeout' => env('FFMPEG_TIMEOUT', 3600),
+        'threads' => env('FFMPEG_THREADS'),
+    ],
+
 ];

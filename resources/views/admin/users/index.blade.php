@@ -27,7 +27,7 @@
                     </tr>
                 </thead>
                 <tbody class="text-gray-800 dark:text-white">
-                    @foreach ($users as $user)
+                    @forelse ($users as $user)
                         <tr id="row-{{ $user->id }}"
                             class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                             <td class="py-3 px-4 name">{{ $user->name }}</td>
@@ -117,9 +117,18 @@
                                 </form>
                             </div>
                         </div>
-                    @endforeach
+                    @empty
+                        <tr>
+                            <td colspan="4" class="py-6 text-center text-gray-500 dark:text-gray-300">
+                                No admin users found.
+                            </td>
+                        </tr>
+                    @endforelse
                 </tbody>
             </table>
+        </div>
+        <div class="mt-6">
+            {{ $users->links() }}
         </div>
     </div>
 @endsection

@@ -1,9 +1,14 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('content')
     <div class="max-w-4xl mx-auto px-4 py-10">
         <div class="bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6">
             <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-6">🎬 Edit Video</h2>
+
+            @php
+                $currentVideoUrl = media_url($video->video_path);
+                $currentThumbnailUrl = media_url($video->thumbnail_path);
+            @endphp
 
             @if (session('success'))
                 <div class="mb-4 px-4 py-3 rounded bg-green-100 text-green-800 text-sm font-medium">
@@ -42,30 +47,64 @@
                     <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Current Video</label>
                     <div
                         class="rounded-md overflow-hidden shadow-md transform transition duration-300 hover:scale-105 w-60">
-                        <video width="100%" class="rounded" controls>
-                            <source src="{{ asset('storage/' . $video->video_path) }}" type="video/mp4">
-                        </video>
+                        @if ($currentVideoUrl)
+                            <video width="100%" class="rounded" controls preload="metadata"
+                                @if ($currentThumbnailUrl) poster="{{ $currentThumbnailUrl }}" @endif>
+                                <source src="{{ $currentVideoUrl }}" type="video/mp4">
+                            </video>
+                        @else
+                            <div class="flex items-center justify-center h-32 text-sm text-gray-500 dark:text-gray-300">
+                                Video file unavailable.
+                            </div>
+                        @endif
                     </div>
                 </div>
-                @if ($video->thumbnail_path)
+
+                @if ($currentThumbnailUrl || $currentVideoUrl)
+                    @php
+                        $thumbVideoClasses = 'absolute inset-0 w-full h-full object-cover rounded transition-opacity duration-300';
+                        $thumbVideoClasses .= $currentThumbnailUrl
+                            ? ' opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto'
+                            : ' opacity-100';
+                    @endphp
                     <div class="mb-6">
                         <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Current
                             Thumbnail</label>
-                        <img src="{{ asset('storage/' . $video->thumbnail_path) }}" alt="Current Thumbnail"
-                            class="w-60 h-auto rounded shadow-md hover:scale-105 transition-transform duration-300" />
+                        <div
+                            class="relative w-60 h-36 rounded shadow-md overflow-hidden bg-gray-100 dark:bg-gray-800 group">
+                            @if ($currentThumbnailUrl)
+                                <img src="{{ $currentThumbnailUrl }}" alt="Current Thumbnail"
+                                    class="w-full h-full object-cover rounded transition-opacity duration-300 group-hover:opacity-0"
+                                    onerror="const container=this.parentElement; this.remove(); const videoEl=container.querySelector('video'); if(videoEl){ videoEl.classList.remove('opacity-0','pointer-events-none'); videoEl.classList.add('opacity-100'); } const fallbackEl=container.querySelector('[data-fallback]'); if(fallbackEl){ fallbackEl.classList.remove('hidden'); }" />
+                            @endif
+
+                            @if ($currentVideoUrl)
+                                <video src="{{ $currentVideoUrl }}" muted playsinline preload="metadata"
+                                    class="{{ $thumbVideoClasses }}" @if ($currentThumbnailUrl) poster="{{ $currentThumbnailUrl }}" @endif
+                                    loop></video>
+                            @endif
+
+                            <div data-fallback
+                                class="absolute inset-0 flex items-center justify-center text-gray-500 text-xs italic {{ $currentThumbnailUrl || $currentVideoUrl ? 'hidden' : '' }}">
+                                No Preview
+                            </div>
+                        </div>
+                    </div>
+                @else
+                    <div class="mb-6">
+                        <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">Current
+                            Thumbnail</label>
+                        <div
+                            class="w-60 h-36 rounded shadow-md overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-sm text-gray-500 dark:text-gray-300">
+                            No thumbnail uploaded.
+                        </div>
                     </div>
                 @endif
 
-                <div class="mb-5">
-                    <label class="block text-sm font-semibold text-gray-700 dark:text-gray-200">Replace Thumbnail
-                        (optional)</label>
-                    <input type="file" name="thumbnail" accept="image/*"
-                        class="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-green-600 file:text-white hover:file:bg-green-700">
-                    <small class="text-gray-500 dark:text-gray-400">Leave empty to keep current thumbnail.</small>
-                    @error('thumbnail')
-                        <span class="text-red-600 text-sm block mt-1">{{ $message }}</span>
-                    @enderror
-                </div>
+                <p class="mb-5 text-sm text-gray-500 dark:text-gray-400">
+                    Thumbnails are generated automatically 15 seconds into the video. Uploading a new video will refresh the
+                    thumbnail.
+                </p>
 
                 <!-- Upload New Video -->
                 <div class="mb-5">
@@ -79,6 +118,14 @@
                     @error('video')
                         <span class="text-red-600 text-sm block mt-1">{{ $message }}</span>
                     @enderror
+                </div>
+
+                <div x-show="hasNewVideo" x-cloak class="mb-6">
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <div id="replacementPreview" class="relative rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden bg-gray-50 dark:bg-gray-900"></div>
+                        <div id="replacementControls"></div>
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400" x-text="editorStatus"></p>
                 </div>
 
                 <!-- Progress bar -->
@@ -106,18 +153,117 @@
 @endsection
 
 @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
+    <script src="{{ asset('js/video-editor.js') }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script>
         function videoUploadHandler() {
             return {
                 isUploading: false,
                 uploadProgress: 0,
+                hasNewVideo: false,
+                editorStatus: 'Adjust trims, filters, or overlay text before applying edits.',
+                selectedFile: null,
+                editedFile: null,
+                editorInstance: null,
+                previewUrl: null,
                 handleFileChange(event) {
-                    const file = event.target.files[0];
+                    const [file] = event.target.files || [];
                     if (file && file.type !== 'video/mp4') {
                         alert('Only MP4 videos are allowed.');
                         event.target.value = '';
+                        return;
                     }
+
+                    if (!file) {
+                        this.resetEditor();
+                        return;
+                    }
+
+                    this.selectedFile = file;
+                    this.editedFile = file;
+                    this.hasNewVideo = true;
+                    this.editorStatus = 'Loaded video. Configure edits and click "Apply Edits" to update.';
+
+                    if (this.previewUrl) {
+                        URL.revokeObjectURL(this.previewUrl);
+                        this.previewUrl = null;
+                    }
+
+                    this.previewUrl = URL.createObjectURL(file);
+
+                    this.$nextTick(() => {
+                        this.initialiseEditor();
+                    });
+                },
+                initialiseEditor() {
+                    const previewContainer = document.getElementById('replacementPreview');
+                    const controlsContainer = document.getElementById('replacementControls');
+
+                    if (!previewContainer || !controlsContainer) {
+                        return;
+                    }
+
+                    previewContainer.innerHTML = '';
+                    controlsContainer.innerHTML = '';
+
+                    const videoEl = document.createElement('video');
+                    videoEl.src = this.previewUrl;
+                    videoEl.controls = true;
+                    videoEl.muted = true;
+                    videoEl.preload = 'metadata';
+                    videoEl.className = 'w-full rounded-xl object-cover bg-black';
+                    previewContainer.appendChild(videoEl);
+
+                    if (!window.VideoEditorKit) {
+                        this.editorStatus = 'Video editing toolkit failed to load.';
+                        return;
+                    }
+
+                    this.editorInstance = window.VideoEditorKit.attach({
+                        videoElement: videoEl,
+                        previewContainer,
+                        controlsContainer,
+                        getFile: () => this.editedFile,
+                        setFile: (newFile) => {
+                            const oldUrl = this.previewUrl;
+                            this.editedFile = newFile;
+                            this.previewUrl = URL.createObjectURL(newFile);
+                            videoEl.src = this.previewUrl;
+                            videoEl.load();
+
+                            if (this.editorInstance && typeof this.editorInstance.rehydrate === 'function') {
+                                this.editorInstance.rehydrate();
+                            }
+
+                            if (oldUrl) {
+                                URL.revokeObjectURL(oldUrl);
+                            }
+
+                            this.editorStatus = 'Edits applied. The updated video will be uploaded.';
+                        },
+                        onStatus: (message, type) => {
+                            this.editorStatus = message;
+                            if (type === 'error') {
+                                console.error(message);
+                            }
+                        },
+                    });
+                },
+                resetEditor() {
+                    this.hasNewVideo = false;
+                    this.selectedFile = null;
+                    this.editedFile = null;
+                    this.editorStatus = 'Adjust trims, filters, or overlay text before applying edits.';
+                    if (this.previewUrl) {
+                        URL.revokeObjectURL(this.previewUrl);
+                        this.previewUrl = null;
+                    }
+                    const previewContainer = document.getElementById('replacementPreview');
+                    const controlsContainer = document.getElementById('replacementControls');
+                    if (previewContainer) previewContainer.innerHTML = '';
+                    if (controlsContainer) controlsContainer.innerHTML = '';
+                    this.editorInstance = null;
                 },
                 submitForm(event) {
                     this.isUploading = true;
@@ -125,6 +271,11 @@
 
                     const form = event.target;
                     const data = new FormData(form);
+
+                    if (this.hasNewVideo && this.editedFile) {
+                        data.delete('video');
+                        data.append('video', this.editedFile, this.editedFile.name);
+                    }
 
                     fetch(form.action, {
                         method: 'POST',
@@ -134,7 +285,9 @@
                         body: data,
                     }).then(async response => {
                         this.isUploading = false;
-                        if (!response.ok) throw new Error('Upload failed');
+                        if (!response.ok) {
+                            throw new Error('Upload failed');
+                        }
                         window.location.href = "{{ route('videos.index') }}";
                     }).catch(error => {
                         this.isUploading = false;
@@ -142,7 +295,6 @@
                         console.error(error);
                     });
 
-                    // Fake progress animation
                     const interval = setInterval(() => {
                         if (this.uploadProgress < 98) {
                             this.uploadProgress += 2;

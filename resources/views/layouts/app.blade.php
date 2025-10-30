@@ -21,7 +21,6 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <title>Video Library</title>
     <link rel="stylesheet" href="{{ asset('css/app.css') }}">
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 
