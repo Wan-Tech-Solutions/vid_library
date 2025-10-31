@@ -18,9 +18,17 @@
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
 
     <!-- Scripts -->
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <title>Video Library</title>
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+    @if (file_exists(public_path('build/manifest.json')))
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @else
+        @if (file_exists(public_path('css/app.css')))
+            <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+        @endif
+        @if (file_exists(public_path('js/app.js')))
+            <script src="{{ asset('js/app.js') }}" defer></script>
+        @endif
+    @endif
+    
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 
@@ -148,3 +156,4 @@
 </body>
 
 </html>
+

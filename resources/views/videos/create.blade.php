@@ -75,8 +75,6 @@
 
 @push('scripts')
     <script src="https://cdn.lordicon.com/lordicon.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
-    <script src="{{ asset('js/video-editor.js') }}"></script>
     <script>
         (() => {
             const CHUNK_SIZE = 8 * 1024 * 1024;

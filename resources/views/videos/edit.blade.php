@@ -1,9 +1,9 @@
-﻿@extends('layouts.app')
+@extends('layouts.app')
 
 @section('content')
     <div class="max-w-4xl mx-auto px-4 py-10">
         <div class="bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6">
-            <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-6">🎬 Edit Video</h2>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-6">?? Edit Video</h2>
 
             @php
                 $currentVideoUrl = media_url($video->video_path);
@@ -123,9 +123,7 @@
                 <div x-show="hasNewVideo" x-cloak class="mb-6">
                     <div class="grid gap-4 md:grid-cols-2">
                         <div id="replacementPreview" class="relative rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden bg-gray-50 dark:bg-gray-900"></div>
-                        <div id="replacementControls"></div>
                     </div>
-                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400" x-text="editorStatus"></p>
                 </div>
 
                 <!-- Progress bar -->
@@ -153,8 +151,6 @@
 @endsection
 
 @push('scripts')
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
-    <script src="{{ asset('js/video-editor.js') }}"></script>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script>
         function videoUploadHandler() {
@@ -162,13 +158,11 @@
                 isUploading: false,
                 uploadProgress: 0,
                 hasNewVideo: false,
-                editorStatus: 'Adjust trims, filters, or overlay text before applying edits.',
                 selectedFile: null,
-                editedFile: null,
-                editorInstance: null,
                 previewUrl: null,
                 handleFileChange(event) {
-                    const [file] = event.target.files || [];
+                    const files = event.target.files || [];
+                    const file = files.length ? files[0] : null;
                     if (file && file.type !== 'video/mp4') {
                         alert('Only MP4 videos are allowed.');
                         event.target.value = '';
@@ -176,94 +170,47 @@
                     }
 
                     if (!file) {
-                        this.resetEditor();
+                        this.resetSelection();
                         return;
                     }
 
                     this.selectedFile = file;
-                    this.editedFile = file;
                     this.hasNewVideo = true;
-                    this.editorStatus = 'Loaded video. Configure edits and click "Apply Edits" to update.';
 
                     if (this.previewUrl) {
                         URL.revokeObjectURL(this.previewUrl);
-                        this.previewUrl = null;
                     }
 
                     this.previewUrl = URL.createObjectURL(file);
-
-                    this.$nextTick(() => {
-                        this.initialiseEditor();
-                    });
+                    this.$nextTick(() => this.renderPreview());
                 },
-                initialiseEditor() {
+                renderPreview() {
                     const previewContainer = document.getElementById('replacementPreview');
-                    const controlsContainer = document.getElementById('replacementControls');
-
-                    if (!previewContainer || !controlsContainer) {
+                    if (!previewContainer) {
                         return;
                     }
-
                     previewContainer.innerHTML = '';
-                    controlsContainer.innerHTML = '';
-
-                    const videoEl = document.createElement('video');
-                    videoEl.src = this.previewUrl;
-                    videoEl.controls = true;
-                    videoEl.muted = true;
-                    videoEl.preload = 'metadata';
-                    videoEl.className = 'w-full rounded-xl object-cover bg-black';
-                    previewContainer.appendChild(videoEl);
-
-                    if (!window.VideoEditorKit) {
-                        this.editorStatus = 'Video editing toolkit failed to load.';
+                    if (!this.previewUrl) {
                         return;
                     }
-
-                    this.editorInstance = window.VideoEditorKit.attach({
-                        videoElement: videoEl,
-                        previewContainer,
-                        controlsContainer,
-                        getFile: () => this.editedFile,
-                        setFile: (newFile) => {
-                            const oldUrl = this.previewUrl;
-                            this.editedFile = newFile;
-                            this.previewUrl = URL.createObjectURL(newFile);
-                            videoEl.src = this.previewUrl;
-                            videoEl.load();
-
-                            if (this.editorInstance && typeof this.editorInstance.rehydrate === 'function') {
-                                this.editorInstance.rehydrate();
-                            }
-
-                            if (oldUrl) {
-                                URL.revokeObjectURL(oldUrl);
-                            }
-
-                            this.editorStatus = 'Edits applied. The updated video will be uploaded.';
-                        },
-                        onStatus: (message, type) => {
-                            this.editorStatus = message;
-                            if (type === 'error') {
-                                console.error(message);
-                            }
-                        },
-                    });
+                    const video = document.createElement('video');
+                    video.controls = true;
+                    video.preload = 'metadata';
+                    video.src = this.previewUrl;
+                    video.className = 'w-full rounded-xl object-cover bg-black';
+                    previewContainer.appendChild(video);
                 },
-                resetEditor() {
+                resetSelection() {
                     this.hasNewVideo = false;
                     this.selectedFile = null;
-                    this.editedFile = null;
-                    this.editorStatus = 'Adjust trims, filters, or overlay text before applying edits.';
                     if (this.previewUrl) {
                         URL.revokeObjectURL(this.previewUrl);
                         this.previewUrl = null;
                     }
                     const previewContainer = document.getElementById('replacementPreview');
-                    const controlsContainer = document.getElementById('replacementControls');
-                    if (previewContainer) previewContainer.innerHTML = '';
-                    if (controlsContainer) controlsContainer.innerHTML = '';
-                    this.editorInstance = null;
+                    if (previewContainer) {
+                        previewContainer.innerHTML = '';
+                    }
                 },
                 submitForm(event) {
                     this.isUploading = true;
@@ -272,9 +219,9 @@
                     const form = event.target;
                     const data = new FormData(form);
 
-                    if (this.hasNewVideo && this.editedFile) {
+                    if (this.hasNewVideo && this.selectedFile) {
                         data.delete('video');
-                        data.append('video', this.editedFile, this.editedFile.name);
+                        data.append('video', this.selectedFile, this.selectedFile.name);
                     }
 
                     fetch(form.action, {
@@ -292,7 +239,7 @@
                         window.location.href = "{{ route('videos.index') }}";
                     }).catch(error => {
                         this.isUploading = false;
-                        alert("Upload failed. Please try again.");
+                        alert('Upload failed. Please try again.');
                         console.error(error);
                     });
 
@@ -308,3 +255,5 @@
         }
     </script>
 @endpush
+
+
