@@ -77,7 +77,7 @@
     <script src="https://cdn.lordicon.com/lordicon.js"></script>
     <script>
         (() => {
-            const CHUNK_SIZE = 8 * 1024 * 1024;
+            const CHUNK_SIZE = 4 * 1024 * 1024;
             const MAX_PARALLEL_UPLOADS = 2;
 
             const form = document.getElementById('uploadForm');
@@ -437,7 +437,8 @@
                 entry.elements.cancelButton.classList.remove('hidden');
                 entry.elements.resumeButton.classList.add('hidden');
                 entry.elements.removeButton.disabled = true;
-                entry.elements.statusText.textContent = 'Preparing upload...';
+                entry.elements.statusText.textContent = 'Uploading 0%';
+                updateProgress(entry, 0);
 
                 const totalChunks = Math.max(1, Math.ceil(entry.file.size / CHUNK_SIZE));
                 entry.totalChunks = totalChunks;
@@ -450,6 +451,8 @@
                     const start = index * CHUNK_SIZE;
                     const end = Math.min(start + CHUNK_SIZE, entry.file.size);
                     const chunk = entry.file.slice(start, end);
+                    const chunkSize = chunk.size;
+                    const isLastChunk = index === totalChunks - 1;
 
                     const formData = new FormData();
                     formData.append('upload_id', entry.uploadId);
@@ -459,27 +462,13 @@
                     formData.append('chunk', chunk, `${entry.file.name}.part${index}`);
                     formData.append('_token', csrfToken);
 
-                    const controller = new AbortController();
-                    entry.abortController = controller;
-
-                    const response = await fetch(routes.chunk, {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'X-CSRF-TOKEN': csrfToken,
-                        },
-                        credentials: 'same-origin',
-                        signal: controller.signal,
-                    });
-
-                    if (!response.ok) {
-                        const message = await response.text();
-                        throw new Error(message || 'Chunk upload failed');
-                    }
-
+                    await sendChunk(entry, formData, index, totalChunks);
                     entry.uploadedChunks = index + 1;
-                    entry.elements.statusText.textContent = `Uploading chunk ${index + 1} of ${totalChunks}`;
-                    updateProgress(entry, Math.round((entry.uploadedChunks / totalChunks) * 100));
+                    const uploadedBytes = Math.min(entry.file.size, start + chunkSize);
+                    const percentComplete = Math.round((uploadedBytes / entry.file.size) * 100);
+                    const displayPercent = isLastChunk ? Math.min(percentComplete, 99) : percentComplete;
+                    entry.elements.statusText.textContent = `Uploading ${displayPercent}%`;
+                    updateProgress(entry, displayPercent);
                     entry.abortController = null;
                 }
 
@@ -540,6 +529,46 @@
                 updateProgress(entry, 0);
                 await cleanupPartial(entry);
                 refreshUI();
+            }
+
+            function sendChunk(entry, formData, chunkIndex, totalChunks) {
+                return new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', routes.chunk, true);
+                    xhr.responseType = 'text';
+                    xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken);
+                    xhr.withCredentials = true;
+
+                    xhr.upload.onprogress = (event) => {
+                        if (!event.lengthComputable || entry.cancelRequested) {
+                            return;
+                        }
+                        const baseBytes = chunkIndex * CHUNK_SIZE;
+                        const uploadedBytes = Math.min(entry.file.size, baseBytes + event.loaded);
+                        const percent = Math.round((uploadedBytes / entry.file.size) * 100);
+                        const isLastChunk = chunkIndex === totalChunks - 1;
+                        const cappedPercent = Math.max(1, isLastChunk ? Math.min(percent, 99) : percent);
+                        updateProgress(entry, cappedPercent);
+                        entry.elements.statusText.textContent = `Uploading ${cappedPercent}%`;
+                    };
+
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            resolve();
+                        } else {
+                            reject(new Error(xhr.responseText || 'Chunk upload failed'));
+                        }
+                    };
+
+                    xhr.onerror = () => reject(new Error('Network error'));
+                    xhr.onabort = () => reject(new Error('cancelled'));
+
+                    entry.abortController = {
+                        abort: () => xhr.abort(),
+                    };
+
+                    xhr.send(formData);
+                });
             }
 
             async function cleanupPartial(entry) {
