@@ -283,6 +283,7 @@
                             'X-CSRF-TOKEN': '{{ csrf_token() }}',
                         },
                         body: data,
+                        credentials: 'same-origin',
                     }).then(async response => {
                         this.isUploading = false;
                         if (!response.ok) {

@@ -469,6 +469,7 @@
                         headers: {
                             'X-CSRF-TOKEN': csrfToken,
                         },
+                        credentials: 'same-origin',
                         signal: controller.signal,
                     });
 
@@ -510,6 +511,7 @@
                     headers: {
                         'X-CSRF-TOKEN': csrfToken,
                     },
+                    credentials: 'same-origin',
                 });
 
                 if (!response.ok) {
@@ -551,6 +553,7 @@
                         headers: {
                             'X-CSRF-TOKEN': csrfToken,
                         },
+                        credentials: 'same-origin',
                     });
                 } catch (error) {
                     console.warn('Unable to clean up upload', error);
