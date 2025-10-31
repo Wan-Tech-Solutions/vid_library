@@ -183,6 +183,17 @@ class VideoController extends Controller
             return null;
         }
 
+        $ffmpegBinary = (string) config('services.ffmpeg.ffmpeg');
+        $ffprobeBinary = (string) config('services.ffmpeg.ffprobe');
+
+        if ($ffmpegBinary === '' || $ffprobeBinary === '') {
+            return null;
+        }
+
+        if (! is_file($ffmpegBinary) || ! is_file($ffprobeBinary)) {
+            return null;
+        }
+
         $videoFileName = basename($videoPath);
         $thumbnailName = pathinfo($videoFileName, PATHINFO_FILENAME) . '.jpg';
         $relativeThumbnailPath = 'thumbnails/' . $thumbnailName;
