@@ -15,7 +15,7 @@
                 alt="" class="w-full h-full object-cover opacity-60">
         </div>
 
-        <div class="relative max-w-6xl mx-auto px-4 py-16 lg:py-20">
+        <div class="relative max-w-6xl mx-auto px-4 py-4 lg:py-8">
             <div class="grid lg:grid-cols-2 gap-10 items-center">
                 <div class="space-y-6">
                     <span class="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-white/10 text-sm tracking-wide">
