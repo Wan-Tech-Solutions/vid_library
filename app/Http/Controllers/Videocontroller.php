@@ -8,11 +8,7 @@ use App\Models\Video;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Illuminate\Support\Facades\Auth;
-use FFMpeg\FFMpeg;
-use FFMpeg\FFProbe;
-use FFMpeg\Coordinate\TimeCode;
 use Illuminate\Support\Str;
-use Alchemy\BinaryDriver\Exception\ExecutableNotFoundException;
 
 class VideoController extends Controller
 {
@@ -67,13 +63,11 @@ class VideoController extends Controller
             $request->integer('total_chunks')
         );
 
-        $thumbPath = $this->generateVideoThumbnail($videoPath);
-
         $video = Video::create([
             'title' => $request->title,
             'description' => $request->description,
             'video_path' => $videoPath,
-            'thumbnail_path' => $thumbPath,
+            'thumbnail_path' => null,
             'uploaded_by' => auth()->id(),
             'is_published' => false,
         ]);
@@ -128,7 +122,7 @@ class VideoController extends Controller
 
             $newVideoPath = $request->file('video')->store('videos', 'public');
             $video->video_path = $newVideoPath;
-            $video->thumbnail_path = $this->generateVideoThumbnail($newVideoPath);
+            $video->thumbnail_path = null;
         }
 
         $video->save();
@@ -173,78 +167,6 @@ class VideoController extends Controller
         }
 
         return response()->json(['success' => true]);
-    }
-
-    protected function generateVideoThumbnail($videoPath)
-    {
-        $disk = Storage::disk('public');
-
-        if (! $disk->exists($videoPath)) {
-            return null;
-        }
-
-        $ffmpegBinary = (string) config('services.ffmpeg.ffmpeg');
-        $ffprobeBinary = (string) config('services.ffmpeg.ffprobe');
-
-        if ($ffmpegBinary === '' || $ffprobeBinary === '') {
-            return null;
-        }
-
-        if (! is_file($ffmpegBinary) || ! is_file($ffprobeBinary)) {
-            return null;
-        }
-
-        $videoFileName = basename($videoPath);
-        $thumbnailName = pathinfo($videoFileName, PATHINFO_FILENAME) . '.jpg';
-        $relativeThumbnailPath = 'thumbnails/' . $thumbnailName;
-
-        $videoFullPath = $disk->path($videoPath);
-        $thumbnailFullPath = $disk->path($relativeThumbnailPath);
-
-        $disk->makeDirectory('thumbnails');
-
-        try {
-            $config = $this->ffmpegConfiguration();
-            $ffmpeg = FFMpeg::create($config);
-            $ffprobe = FFProbe::create($config);
-        } catch (ExecutableNotFoundException $exception) {
-            logger()->warning('FFMpeg binaries are missing. Skipping thumbnail generation.', [
-                'path' => $videoPath,
-                'exception' => $exception->getMessage(),
-            ]);
-
-            return null;
-        } catch (\Throwable $exception) {
-            logger()->warning('Unable to initialise FFMpeg. Skipping thumbnail generation.', [
-                'path' => $videoPath,
-                'exception' => $exception->getMessage(),
-            ]);
-
-            return null;
-        }
-
-        $video = $ffmpeg->open($videoFullPath);
-
-        try {
-            $duration = (int) ceil($ffprobe->format($videoFullPath)->get('duration') ?? 0);
-        } catch (\Throwable $e) {
-            $duration = 0;
-        }
-
-        $captureSecond = 1;
-
-        if ($duration > 0) {
-            $captureSecond = $duration > 15 ? 15 : max(1, $duration - 1);
-        }
-
-        try {
-            $video->frame(TimeCode::fromSeconds($captureSecond))
-                ->save($thumbnailFullPath);
-        } catch (\Throwable $e) {
-            $video->frame(TimeCode::fromSeconds(1))->save($thumbnailFullPath);
-        }
-
-        return $relativeThumbnailPath;
     }
 
     public function uploadChunk(Request $request)
@@ -323,13 +245,11 @@ class VideoController extends Controller
 
         $videoPath = $request->file('video')->store('videos', 'public');
 
-        $thumbPath = $this->generateVideoThumbnail($videoPath);
-
         $video = Video::create([
             'title' => $request->title,
             'description' => $request->description,
             'video_path' => $videoPath,
-            'thumbnail_path' => $thumbPath,
+            'thumbnail_path' => null,
             'uploaded_by' => auth()->id(),
             'is_published' => false,
         ]);
@@ -393,28 +313,4 @@ class VideoController extends Controller
         return str_pad((string) $index, 6, '0', STR_PAD_LEFT);
     }
 
-    protected function ffmpegConfiguration(): array
-    {
-        $config = [];
-
-        if ($ffmpegBinary = config('services.ffmpeg.ffmpeg')) {
-            $config['ffmpeg.binaries'] = $ffmpegBinary;
-        }
-
-        if ($ffprobeBinary = config('services.ffmpeg.ffprobe')) {
-            $config['ffprobe.binaries'] = $ffprobeBinary;
-        }
-
-        $timeout = config('services.ffmpeg.timeout');
-        if (! is_null($timeout) && $timeout !== '') {
-            $config['timeout'] = (int) $timeout;
-        }
-
-        $threads = config('services.ffmpeg.threads');
-        if (! is_null($threads) && $threads !== '') {
-            $config['ffmpeg.threads'] = (int) $threads;
-        }
-
-        return $config;
-    }
 }

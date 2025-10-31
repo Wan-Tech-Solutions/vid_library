@@ -44,7 +44,7 @@
                     class="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl py-12 text-center text-gray-500 dark:text-gray-400">
                     <span class="text-xl">[ ]</span>
                     <p class="font-medium">No videos selected yet</p>
-                    <p class="text-sm">Choose videos to review before uploading. Thumbnails are captured automatically.</p>
+                    <p class="text-sm">Choose videos to review before uploading. You can preview them before sending.</p>
                 </div>
 
                 <div id="selectedVideosContainer" class="space-y-6"></div>
