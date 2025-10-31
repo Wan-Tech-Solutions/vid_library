@@ -459,6 +459,7 @@
                     formData.append('total_chunks', totalChunks.toString());
                     formData.append('file_name', entry.file.name);
                     formData.append('chunk', chunk, `${entry.file.name}.part${index}`);
+                    formData.append('_token', csrfToken);
 
                     const controller = new AbortController();
                     entry.abortController = controller;
@@ -504,6 +505,7 @@
                 formData.append('title', entry.elements.titleInput.value.trim() || deriveDefaultTitle(entry.file.name));
                 formData.append('description', entry.elements.descInput.value.trim());
                 formData.append('total_chunks', entry.totalChunks.toString());
+                formData.append('_token', csrfToken);
 
                 const response = await fetch(routes.finalize, {
                     method: 'POST',
@@ -545,6 +547,7 @@
             async function cleanupPartial(entry) {
                 const formData = new FormData();
                 formData.append('upload_id', entry.uploadId);
+                formData.append('_token', csrfToken);
 
                 try {
                     await fetch(routes.cancel, {
