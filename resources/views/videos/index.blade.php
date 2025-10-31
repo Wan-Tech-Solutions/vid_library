@@ -1,4 +1,4 @@
-@extends('layouts.app')
+﻿@extends('layouts.app')
 
 @section('content')
     <div class="max-w-7xl mx-auto px-6 py-10">
@@ -50,36 +50,26 @@
                     @forelse ($videos as $video)
                         <tr data-id="{{ $video->id }}">
                             <td class="px-4 py-3">
-                                <div
-                                    class="relative group w-[160px] h-[90px] overflow-hidden rounded shadow bg-gray-100 dark:bg-gray-800">
-                                    @php
-                                        $thumbUrl = media_url($video->thumbnail_path);
-                                        $videoUrl = media_url($video->video_path);
-                                        $hasThumbnail = (bool) $thumbUrl;
-                                        $videoClasses = 'absolute top-0 left-0 w-full h-full object-cover rounded transition-opacity duration-300';
-                                        $videoClasses .= $hasThumbnail
-                                            ? ' opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto'
-                                            : ' opacity-100';
-                                        $showFallback = ! $thumbUrl && ! $videoUrl;
-                                    @endphp
-
-                                    {{-- Show thumbnail --}}
-                                    @if ($thumbUrl)
-                                        <img src="{{ $thumbUrl }}" alt="Thumbnail"
-                                            class="w-full h-full object-cover rounded transition-opacity duration-300 group-hover:opacity-0"
-                                            onerror="const container=this.parentElement; this.remove(); const videoEl=container.querySelector('video'); if(videoEl){ videoEl.classList.remove('opacity-0','pointer-events-none'); videoEl.classList.add('opacity-100'); } const fallbackEl=container.querySelector('[data-fallback]'); if(fallbackEl){ fallbackEl.classList.remove('hidden'); }" />
-                                    @endif
-
-                                    {{-- Auto-play video preview on hover --}}
+                                @php
+                                    $videoUrl = media_url($video->video_path);
+                                @endphp
+                                <div class="relative group w-[200px] md:w-[220px]" data-video-container>
                                     @if ($videoUrl)
-                                        <video src="{{ $videoUrl }}" muted playsinline preload="metadata"
-                                            class="{{ $videoClasses }}" @if ($thumbUrl) poster="{{ $thumbUrl }}" @endif></video>
+                                        <video controls preload="metadata"
+                                            class="w-full h-[120px] md:h-[140px] rounded shadow bg-black object-cover"
+                                            controlslist="nodownload noremoteplayback"
+                                            playsinline
+                                            data-display-duration>
+                                            <source src="{{ $videoUrl }}" type="video/mp4">
+                                        </video>
+                                        <span data-video-duration
+                                            class="pointer-events-none absolute bottom-2 right-2 rounded bg-black/80 px-2 py-1 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100">--:--</span>
+                                    @else
+                                        <div
+                                            class="flex h-[120px] items-center justify-center rounded bg-gray-100 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-300">
+                                            No video available
+                                        </div>
                                     @endif
-
-                                    <div data-fallback
-                                        class="absolute inset-0 flex items-center justify-center text-gray-500 text-xs italic {{ $showFallback ? '' : 'hidden' }}">
-                                        No Preview
-                                    </div>
                                 </div>
                             </td>
 
@@ -149,49 +139,37 @@
     </div>
 
     @push('scripts')
-        <script>
-            $(function() {
-                $("#video-table").sortable({
-                    update: function(event, ui) {
-                        let order = [];
-                        $('#video-table tr').each(function(index, element) {
-                            order.push({
-                                id: $(element).data('id'),
-                                position: index + 1
-                            });
+    <script>
+        $(function() {
+            $('#video-table').sortable({
+                update: function(event, ui) {
+                    const order = [];
+                    $('#video-table tr').each(function(index, element) {
+                        order.push({
+                            id: $(element).data('id'),
+                            position: index + 1
                         });
-
-                        $.ajax({
-                            url: "{{ route('videos.reorder') }}",
-                            method: 'POST',
-                            data: {
-                                order: order,
-                                _token: '{{ csrf_token() }}'
-                            },
-                            success: function(response) {
-                                console.log('Reordered');
-                            },
-                            error: function() {
-                                alert('Failed to reorder. Try again.');
-                            }
-                        });
-                    }
-                });
-            });
-            document.addEventListener('DOMContentLoaded', function() {
-                const previews = document.querySelectorAll('video');
-
-                previews.forEach(video => {
-                    video.addEventListener('mouseenter', () => {
-                        video.play();
                     });
 
-                    video.addEventListener('mouseleave', () => {
-                        video.pause();
-                        video.currentTime = 0;
+                    $.ajax({
+                        url: '{{ route('videos.reorder') }}',
+                        method: 'POST',
+                        data: {
+                            order: order,
+                            _token: '{{ csrf_token() }}'
+                        },
+                        success: function() {
+                            console.log('Reordered');
+                        },
+                        error: function() {
+                            alert('Failed to reorder. Try again.');
+                        }
                     });
-                });
+                }
             });
-        </script>
-    @endpush
+        });
+    </script>
+@endpush
 @endsection
+
+

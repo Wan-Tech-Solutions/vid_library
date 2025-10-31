@@ -92,21 +92,20 @@
                 <div class="lg:col-span-2">
                     @if ($latest)
                         @php
-                            $latestThumb = media_url($latest->thumbnail_path);
                             $latestVideo = media_url($latest->video_path);
                         @endphp
                         <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-md overflow-hidden">
-                            <div class="bg-slate-100 dark:bg-slate-800 aspect-video">
+                            <div class="relative group bg-slate-100 dark:bg-slate-800 aspect-video" data-video-container>
                                 @if ($latestVideo)
                                     <video controls preload="metadata"
                                         class="w-full h-full object-cover"
-                                        @if ($latestThumb) poster="{{ $latestThumb }}" @endif>
+                                        controlslist="nodownload noremoteplayback"
+                                        playsinline
+                                        data-display-duration>
                                         <source src="{{ $latestVideo }}" type="video/mp4">
                                     </video>
-                                @elseif ($latestThumb)
-                                    <img src="{{ $latestThumb }}" alt="{{ $latest->title }}"
-                                        class="w-full h-full object-cover"
-                                        loading="lazy">
+                                    <span data-video-duration
+                                        class="pointer-events-none absolute bottom-3 right-3 rounded bg-black/80 px-3 py-1 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">--:--</span>
                                 @else
                                     <div class="flex items-center justify-center h-full text-slate-500 dark:text-slate-300">
                                         No media available.
@@ -144,43 +143,44 @@
                             A quick look at other videos trending this week.
                         </p>
                         <div class="mt-4 space-y-4">
-                            @forelse ($others->take(4) as $video)
-                                @php
-                                    $thumb = media_url($video->thumbnail_path);
-                                    $videoUrl = media_url($video->video_path);
-                                @endphp
-                                <div class="flex gap-3">
-                                    <div class="w-20 h-14 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 shrink-0">
-                                        @if ($videoUrl)
-                                            <video preload="metadata" class="w-full h-full object-cover"
-                                                @if ($thumb) poster="{{ $thumb }}" @endif>
-                                                <source src="{{ $videoUrl }}" type="video/mp4">
-                                            </video>
-                                        @elseif ($thumb)
-                                            <img src="{{ $thumb }}" alt="{{ $video->title }}"
-                                                class="w-full h-full object-cover"
-                                                loading="lazy">
-                                        @else
-                                            <div class="flex h-full items-center justify-center text-xs text-slate-400">
-                                                No preview
-                                            </div>
-                                        @endif
-                                    </div>
-                                    <div class="space-y-1">
-                                        <p class="text-sm font-semibold text-slate-900 dark:text-white">
-                                            {{ $video->title }}
-                                        </p>
-                                        <p class="text-xs text-slate-500 dark:text-slate-400">
-                                            {{ Str::limit($video->description, 60) }}
-                                        </p>
-                                        @include('partials.share-buttons', ['video' => $video])
-                                    </div>
+                        @forelse ($others->take(4) as $video)
+                            @php
+                                $videoUrl = media_url($video->video_path);
+                            @endphp
+                            <div class="space-y-2">
+                                <div class="relative group w-full rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-800"
+                                    data-video-container>
+                                    @if ($videoUrl)
+                                        <video preload="metadata" class="w-full aspect-video object-cover"
+                                            controls
+                                            controlslist="nodownload noremoteplayback"
+                                            playsinline
+                                            data-display-duration>
+                                            <source src="{{ $videoUrl }}" type="video/mp4">
+                                        </video>
+                                        <span data-video-duration
+                                            class="pointer-events-none absolute bottom-2 right-2 rounded bg-black/80 px-2 py-[2px] text-[11px] font-semibold text-white opacity-0 transition group-hover:opacity-100">--:--</span>
+                                    @else
+                                        <div class="flex aspect-video items-center justify-center text-xs text-slate-400">
+                                            No preview
+                                        </div>
+                                    @endif
                                 </div>
-                            @empty
-                                <p class="text-sm text-slate-500 dark:text-slate-300">
-                                    Add more videos to see recommendations here.
-                                </p>
-                            @endforelse
+                                <div class="space-y-1">
+                                    <p class="text-sm font-semibold text-slate-900 dark:text-white">
+                                        {{ $video->title }}
+                                    </p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                                        {{ Str::limit($video->description, 60) }}
+                                    </p>
+                                    @include('partials.share-buttons', ['video' => $video])
+                                </div>
+                            </div>
+                        @empty
+                            <p class="text-sm text-slate-500 dark:text-slate-300">
+                                Add more videos to see recommendations here.
+                            </p>
+                        @endforelse
                         </div>
                     </div>
                 </div>
@@ -199,22 +199,21 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 @foreach ($others->skip(4) as $video)
                     @php
-                        $thumb = media_url($video->thumbnail_path);
                         $videoUrl = media_url($video->video_path);
                     @endphp
                     <article
                         class="group bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-lg transition">
-                        <div class="relative bg-slate-100 dark:bg-slate-800 aspect-video">
+                        <div class="relative bg-slate-100 dark:bg-slate-800 aspect-video" data-video-container>
                             @if ($videoUrl)
                                 <video controls preload="metadata"
                                     class="w-full h-full object-cover"
-                                    @if ($thumb) poster="{{ $thumb }}" @endif>
+                                    controlslist="nodownload noremoteplayback"
+                                    playsinline
+                                    data-display-duration>
                                     <source src="{{ $videoUrl }}" type="video/mp4">
                                 </video>
-                            @elseif ($thumb)
-                                <img src="{{ $thumb }}" alt="{{ $video->title }}"
-                                    class="w-full h-full object-cover"
-                                    loading="lazy">
+                                <span data-video-duration
+                                    class="pointer-events-none absolute bottom-3 right-3 rounded bg-black/80 px-3 py-1 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">--:--</span>
                             @else
                                 <div class="absolute inset-0 flex items-center justify-center text-sm text-slate-500">
                                     No media available.

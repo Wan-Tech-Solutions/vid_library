@@ -4,7 +4,7 @@
     <div class="max-w-5xl mx-auto px-4 py-8">
         <div class="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-xl">
             <div class="flex items-center gap-3 mb-6">
-                <lord-icon src="https://cdn.lordicon.com/abdfjfnc.json" trigger="loop" colors="primary:#16a34a"
+                <lord-icon src="https://cdn.lordicon.com/tdrtiskw.json" trigger="loop" colors="primary:#16a34a"
                     style="width:40px;height:40px">
                 </lord-icon>
                 <div>
