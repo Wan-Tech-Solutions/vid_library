@@ -53,10 +53,10 @@
                                 @php
                                     $videoUrl = media_url($video->video_path);
                                 @endphp
-                                <div class="relative group w-[200px] md:w-[220px]" data-video-container>
+                                <div class="relative group w-[160px] md:w-[180px]" data-video-container>
                                     @if ($videoUrl)
                                         <video controls preload="metadata"
-                                            class="w-full h-[120px] md:h-[140px] rounded shadow bg-black object-cover"
+                                            class="w-full h-[90px] md:h-[110px] rounded shadow bg-black object-cover"
                                             controlslist="nodownload noremoteplayback"
                                             playsinline
                                             data-display-duration>
@@ -73,7 +73,11 @@
                                 </div>
                             </td>
 
-                            <td class="px-4 py-3">{{ $video->title }}</td>
+                            <td class="px-4 py-3 max-w-[240px]">
+                                <div class="break-words text-sm font-medium text-gray-900 dark:text-white">
+                                    {{ $video->title }}
+                                </div>
+                            </td>
                             <td class="px-4 py-3">
                                 @if ($video->is_published)
                                     <span
@@ -83,49 +87,63 @@
                                         class="inline-block px-3 py-1 text-xs bg-gray-300 text-gray-700 rounded-full">Hidden</span>
                                 @endif
                             </td>
+                            @php
+                                $shareUrl = route('landing', ['v' => $video->id]);
+                            @endphp
                             <td class="px-4 py-3">
-                                <input type="text" readonly value="{{ route('landing') }}?v={{ $video->id }}"
-                                    class="w-full bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded border text-xs text-gray-700 dark:text-white">
+                                <a href="{{ $shareUrl }}" target="_blank" rel="noopener"
+                                    class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-300 break-all">
+                                    {{ $shareUrl }}
+                                </a>
                             </td>
                             <td>{{ $video->created_at->format('M d, Y') }}</td>
-                            <td class="px-4 py-3 space-x-1">
+                            <td class="px-4 py-3">
                                 @php
                                     $isPublished = $video->is_published;
-                                    $btnColor = $isPublished
-                                        ? 'bg-yellow-600 hover:bg-yellow-700'
-                                        : 'bg-blue-600 hover:bg-blue-700';
                                     $btnLabel = $isPublished ? 'Hide' : 'Publish';
+                                    $publishClass = $isPublished
+                                        ? 'text-yellow-700 hover:bg-yellow-50 dark:text-yellow-300 dark:hover:bg-yellow-500/10'
+                                        : 'text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/10';
                                 @endphp
-
-                                <form action="{{ route('videos.togglePublish', $video->id) }}" method="POST"
-                                    class="inline">
-                                    @csrf
-                                    <button type="submit"
-                                        class="{{ $btnColor }} text-white text-xs px-3 py-1 rounded transition duration-200">
-                                        {{ $btnLabel }}
+                                <div class="relative inline-block text-left" data-action-menu>
+                                    <button type="button" data-toggle-menu
+                                        class="flex items-center gap-1 rounded border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
+                                        Actions
+                                        <svg class="h-3 w-3" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M9 1L5 5L1 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                                                stroke-linejoin="round" />
+                                        </svg>
                                     </button>
-                                </form>
-
-
-                                <a href="{{ route('videos.edit', $video->id) }}"
-                                    class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1 rounded inline-block">
-                                    Edit
-                                </a>
-
-                                <form action="{{ route('videos.destroy', $video->id) }}" method="POST" class="inline"
-                                    onsubmit="return confirm('Are you sure you want to delete this video?');">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit"
-                                        class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 rounded">
-                                        Delete
-                                    </button>
-                                </form>
+                                    <div data-menu
+                                        class="absolute right-0 z-20 mt-2 w-40 origin-top-right rounded-md border border-gray-200 bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:border-gray-700 dark:bg-gray-800 hidden">
+                                        <form action="{{ route('videos.togglePublish', $video->id) }}" method="POST"
+                                            class="border-b border-gray-100 dark:border-gray-700">
+                                            @csrf
+                                            <button type="submit"
+                                                class="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium transition {{ $publishClass }}">
+                                                <span>{{ $btnLabel }}</span>
+                                            </button>
+                                        </form>
+                                        <a href="{{ route('videos.edit', $video->id) }}"
+                                            class="block px-3 py-2 text-xs text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">
+                                            Edit
+                                        </a>
+                                        <form action="{{ route('videos.destroy', $video->id) }}" method="POST"
+                                            onsubmit="return confirm('Are you sure you want to delete this video?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit"
+                                                class="flex w-full items-center gap-2 px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="text-center py-6 text-gray-500">No videos found.</td>
+                            <td colspan="6" class="text-center py-6 text-gray-500">No videos found.</td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -166,6 +184,30 @@
                         }
                     });
                 }
+            });
+
+            function closeMenus() {
+                $('[data-action-menu] [data-menu]').addClass('hidden');
+            }
+
+            $(document).on('click', '[data-toggle-menu]', function(e) {
+                e.preventDefault();
+                const menu = $(this).closest('[data-action-menu]').find('[data-menu]');
+                const isHidden = menu.hasClass('hidden');
+                closeMenus();
+                if (isHidden) {
+                    menu.removeClass('hidden');
+                }
+            });
+
+            $(document).on('click', function(e) {
+                if (!$(e.target).closest('[data-action-menu]').length) {
+                    closeMenus();
+                }
+            });
+
+            $(document).on('click', '[data-action-menu] [data-menu] button, [data-action-menu] [data-menu] a', function() {
+                closeMenus();
             });
         });
     </script>

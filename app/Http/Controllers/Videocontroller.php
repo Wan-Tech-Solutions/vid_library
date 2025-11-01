@@ -24,7 +24,7 @@ class VideoController extends Controller
             $query->where('is_published', $request->status);
         }
 
-        $videos = $query->latest()->paginate(10); // <-- Important: paginate, not get
+        $videos = $query->latest()->paginate(10)->withQueryString();
 
         return view('videos.index', compact('videos'));
     }
