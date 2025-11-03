@@ -11,8 +11,8 @@
 </head>
 
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">
-    <main class="py-8">
-        <div class="container mx-auto px-4">
+    <main class="py-8 sm:py-10 lg:py-12">
+        <div class="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
             @yield('content')
         </div>
     </main>

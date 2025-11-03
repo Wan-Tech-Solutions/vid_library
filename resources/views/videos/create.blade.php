@@ -31,9 +31,10 @@
                 @csrf
 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Select Video Files
-                        (.mp4)</label>
-                    <input type="file" id="videoInput" accept="video/mp4" multiple
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Select Video Files (.mp4, .mov, .avi, .mkv, .webm)</label>
+                    <input type="file" id="videoInput"
+                        accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm"
+                        multiple
                         class="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm focus:ring focus:ring-green-400">
                     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
                         Tip: hold Ctrl (Cmd on Mac) or Shift to pick multiple videos at once.
@@ -77,8 +78,33 @@
     <script src="https://cdn.lordicon.com/lordicon.js"></script>
     <script>
         (() => {
-            const CHUNK_SIZE = 4 * 1024 * 1024;
+            const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
+            const MOBILE_CHUNK_SIZE = 2 * 1024 * 1024;
+            const CHUNK_SIZE = window.matchMedia("(max-width: 640px)").matches ? MOBILE_CHUNK_SIZE : DEFAULT_CHUNK_SIZE;
             const MAX_PARALLEL_UPLOADS = 2;
+            const MAX_CHUNK_RETRIES = 3;
+            const SUPPORTED_MIME_TYPES = new Set([
+                'video/mp4',
+                'video/quicktime',
+                'video/x-msvideo',
+                'video/x-matroska',
+                'video/webm',
+                'video/mpeg',
+                'video/3gpp',
+                'video/3gpp2',
+            ]);
+            const SUPPORTED_EXTENSIONS = new Set([
+                'mp4',
+                'mov',
+                'm4v',
+                'avi',
+                'mkv',
+                'webm',
+                'mpg',
+                'mpeg',
+                '3gp',
+                '3g2',
+            ]);
 
             const form = document.getElementById('uploadForm');
             const videoInput = document.getElementById('videoInput');
@@ -102,8 +128,50 @@
                 entries: new Map(),
                 isUploading: false,
             };
+            let wakeLock = null;
 
             form.addEventListener('submit', (event) => event.preventDefault());
+
+            async function requestWakeLock() {
+                if (!('wakeLock' in navigator)) {
+                    return;
+                }
+
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    const handleRelease = () => {
+                        wakeLock = null;
+                    };
+                    if (wakeLock && typeof wakeLock.addEventListener === 'function') {
+                        wakeLock.addEventListener('release', handleRelease, { once: true });
+                    } else if (wakeLock) {
+                        wakeLock.onrelease = handleRelease;
+                    }
+                } catch (error) {
+                    console.warn('Unable to keep the screen awake', error);
+                    wakeLock = null;
+                }
+            }
+
+            async function releaseWakeLock() {
+                if (!wakeLock) {
+                    return;
+                }
+
+                try {
+                    await wakeLock.release();
+                } catch (error) {
+                    console.warn('Unable to release wake lock', error);
+                } finally {
+                    wakeLock = null;
+                }
+            }
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && state.isUploading) {
+                    requestWakeLock();
+                }
+            });
 
             videoInput.addEventListener('change', (event) => {
                 const files = Array.from(event.target.files || []);
@@ -132,8 +200,11 @@
             });
 
             function addEntry(file) {
-                if (file.type !== 'video/mp4') {
-                    notifySummary(`${file.name} skipped (only MP4 files are supported).`, 'error');
+                if (!isSupportedVideo(file)) {
+                    notifySummary(
+                        `${file.name} skipped (unsupported format). Try MP4, MOV, AVI, MKV, or WEBM.`,
+                        'error'
+                    );
                     return;
                 }
 
@@ -353,11 +424,11 @@
                 const completed = entries.filter((entry) => entry.status === 'completed').length;
 
                 queueStatus.textContent = entries.length
-                    ? `Pending: ${pending} · Uploading: ${uploading} · Completed: ${completed}`
+                    ? `Pending: ${pending} | Uploading: ${uploading} | Completed: ${completed}`
                     : '';
 
                 startButton.disabled = pending === 0 || state.isUploading;
-                startButton.textContent = state.isUploading ? 'Uploading…' : 'Upload Selected Videos';
+                startButton.textContent = state.isUploading ? 'Uploading...' : 'Upload Selected Videos';
                 cancelAllButton.disabled = !state.isUploading;
             }
 
@@ -375,6 +446,7 @@
                 }
 
                 state.isUploading = true;
+                requestWakeLock();
                 refreshUI();
 
                 const parallel = Math.min(MAX_PARALLEL_UPLOADS, queue.length);
@@ -392,7 +464,7 @@
                             await uploadEntry(entry);
                             entry.elements.resumeButton.classList.add('hidden');
                         } catch (error) {
-                            if (error.name === 'AbortError' || error.message === 'cancelled') {
+                            if (entry.cancelRequested) {
                                 entry.status = 'cancelled';
                                 entry.uploadedChunks = 0;
                                 entry.elements.statusText.textContent = 'Upload cancelled';
@@ -401,10 +473,19 @@
                                 await cleanupPartial(entry);
                             } else {
                                 entry.status = 'failed';
-                                const message = error.message || 'Upload failed';
-                                entry.elements.statusText.textContent = `${message}. Click resume to retry.`;
+                                const message =
+                                    error && error.message && error.message !== 'cancelled'
+                                        ? error.message
+                                        : 'Connection interrupted';
+                                const percent = entry.totalChunks
+                                    ? Math.round((entry.uploadedChunks / entry.totalChunks) * 100)
+                                    : 0;
+                                entry.elements.statusText.textContent = `${message}. Tap resume to continue.`;
                                 entry.elements.resumeButton.classList.remove('hidden');
-                                notifySummary(`${entry.file.name} failed: ${message}`, 'error');
+                                if (percent > 0) {
+                                    updateProgress(entry, Math.min(percent, 99));
+                                }
+                                notifySummary(`${entry.file.name} paused: ${message}`, 'error');
                             }
                             entry.elements.cancelButton.classList.add('hidden');
                         } finally {
@@ -416,14 +497,15 @@
                     }
                 };
 
-            for (let index = 0; index < parallel; index += 1) {
-                workers.push(worker());
-            }
+                for (let index = 0; index < parallel; index += 1) {
+                    workers.push(worker());
+                }
 
                 await Promise.all(workers);
 
                 state.isUploading = false;
                 refreshUI();
+                releaseWakeLock();
 
                 const hasPending = Array.from(state.entries.values()).some((entry) => entry.status !== 'completed');
                 if (!hasPending && state.entries.size) {
@@ -437,13 +519,18 @@
                 entry.elements.cancelButton.classList.remove('hidden');
                 entry.elements.resumeButton.classList.add('hidden');
                 entry.elements.removeButton.disabled = true;
-                entry.elements.statusText.textContent = 'Uploading 0%';
-                updateProgress(entry, 0);
 
                 const totalChunks = Math.max(1, Math.ceil(entry.file.size / CHUNK_SIZE));
                 entry.totalChunks = totalChunks;
+                const cappedUploadedChunks = Math.max(0, Math.min(entry.uploadedChunks, totalChunks));
+                const startingPercent = Math.round((cappedUploadedChunks / totalChunks) * 100);
+                const initialDisplay = cappedUploadedChunks ? Math.min(startingPercent, 99) : 0;
+                entry.elements.statusText.textContent = cappedUploadedChunks
+                    ? `Resuming ${initialDisplay}%`
+                    : 'Uploading 0%';
+                updateProgress(entry, initialDisplay);
 
-                for (let index = entry.uploadedChunks; index < totalChunks; index += 1) {
+                for (let index = cappedUploadedChunks; index < totalChunks; index += 1) {
                     if (entry.cancelRequested) {
                         throw new Error('cancelled');
                     }
@@ -454,15 +541,18 @@
                     const chunkSize = chunk.size;
                     const isLastChunk = index === totalChunks - 1;
 
-                    const formData = new FormData();
-                    formData.append('upload_id', entry.uploadId);
-                    formData.append('chunk_index', index.toString());
-                    formData.append('total_chunks', totalChunks.toString());
-                    formData.append('file_name', entry.file.name);
-                    formData.append('chunk', chunk, `${entry.file.name}.part${index}`);
-                    formData.append('_token', csrfToken);
+                    const createChunkFormData = () => {
+                        const formData = new FormData();
+                        formData.append('upload_id', entry.uploadId);
+                        formData.append('chunk_index', index.toString());
+                        formData.append('total_chunks', totalChunks.toString());
+                        formData.append('file_name', entry.file.name);
+                        formData.append('chunk', chunk, `${entry.file.name}.part${index}`);
+                        formData.append('_token', csrfToken);
+                        return formData;
+                    };
 
-                    await sendChunk(entry, formData, index, totalChunks);
+                    await uploadChunkWithRetry(entry, createChunkFormData, index, totalChunks);
                     entry.uploadedChunks = index + 1;
                     const uploadedBytes = Math.min(entry.file.size, start + chunkSize);
                     const percentComplete = Math.round((uploadedBytes / entry.file.size) * 100);
@@ -571,6 +661,34 @@
                 });
             }
 
+            async function uploadChunkWithRetry(entry, formDataFactory, chunkIndex, totalChunks, attempt = 1) {
+                try {
+                    await sendChunk(entry, formDataFactory(), chunkIndex, totalChunks);
+                } catch (error) {
+                    entry.abortController = null;
+
+                    if (entry.cancelRequested) {
+                        throw error;
+                    }
+
+                    if (attempt >= MAX_CHUNK_RETRIES) {
+                        throw error;
+                    }
+
+                    const nextAttempt = attempt + 1;
+                    const waitMs = Math.min(2000, 400 * attempt);
+                    entry.elements.statusText.textContent = `Connection lost, retrying (attempt ${nextAttempt} of ${MAX_CHUNK_RETRIES})`;
+                    if (attempt === 1) {
+                        notifySummary(
+                            `${entry.file.name} lost connection. Retrying chunk ${chunkIndex + 1}.`,
+                            'error'
+                        );
+                    }
+                    await delay(waitMs);
+                    return uploadChunkWithRetry(entry, formDataFactory, chunkIndex, totalChunks, nextAttempt);
+                }
+            }
+
             async function cleanupPartial(entry) {
                 const formData = new FormData();
                 formData.append('upload_id', entry.uploadId);
@@ -590,9 +708,30 @@
                 }
             }
 
+            function delay(ms) {
+                return new Promise((resolve) => {
+                    setTimeout(resolve, Math.max(0, ms || 0));
+                });
+            }
+
             function updateProgress(entry, percent) {
                 const clamped = Math.max(0, Math.min(100, percent || 0));
                 entry.elements.progressBar.style.width = `${clamped}%`;
+            }
+
+            function extractExtension(name = '') {
+                const match = String(name).toLowerCase().match(/\.([a-z0-9]+)$/i);
+                return match ? match[1] : '';
+            }
+
+            function isSupportedVideo(file) {
+                if (!file) {
+                    return false;
+                }
+                if (file.type && SUPPORTED_MIME_TYPES.has(file.type.toLowerCase())) {
+                    return true;
+                }
+                return SUPPORTED_EXTENSIONS.has(extractExtension(file.name));
             }
 
             function deriveDefaultTitle(name) {
@@ -642,3 +781,6 @@
         })();
     </script>
 @endpush
+
+
+

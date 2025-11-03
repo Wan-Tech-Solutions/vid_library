@@ -3,15 +3,44 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use App\Models\Video;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Activitylog\Traits\LogsActivity;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rules\File;
 
 class VideoController extends Controller
 {
+    protected array $allowedVideoExtensions = [
+        'mp4',
+        'mov',
+        'm4v',
+        'avi',
+        'mkv',
+        'webm',
+        'mpg',
+        'mpeg',
+        'wmv',
+        '3gp',
+        '3g2',
+    ];
+
+    protected array $allowedVideoMimeTypes = [
+        'video/mp4',
+        'video/quicktime',
+        'video/x-msvideo',
+        'video/x-matroska',
+        'video/webm',
+        'video/mpeg',
+        'video/x-ms-wmv',
+        'video/3gpp',
+        'video/3gpp2',
+    ];
+
+    protected string $unsupportedFormatMessage = 'Unsupported video format. Please upload MP4, MOV, AVI, MKV, or WEBM files.';
+
     public function index(Request $request)
     {
         $query = Video::query();
@@ -42,7 +71,15 @@ class VideoController extends Controller
 
         $request->validate([
             'upload_id' => 'required|string',
-            'file_name' => 'required|string',
+            'file_name' => [
+                'required',
+                'string',
+                function ($attribute, $value, $fail) {
+                    if (! $this->isAllowedExtension($value)) {
+                        $fail($this->unsupportedFormatMessage);
+                    }
+                },
+            ],
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'total_chunks' => 'required|integer|min:1',
@@ -175,7 +212,15 @@ class VideoController extends Controller
             'upload_id' => 'required|string',
             'chunk_index' => 'required|integer|min:0',
             'total_chunks' => 'required|integer|min:1',
-            'file_name' => 'required|string',
+            'file_name' => [
+                'required',
+                'string',
+                function ($attribute, $value, $fail) {
+                    if (! $this->isAllowedExtension($value)) {
+                        $fail($this->unsupportedFormatMessage);
+                    }
+                },
+            ],
             'chunk' => 'required|file',
         ]);
 
@@ -240,7 +285,12 @@ class VideoController extends Controller
         $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'video' => 'required|mimes:mp4|max:512000',
+            'video' => [
+                'required',
+                File::types($this->allowedVideoExtensions)
+                    ->mimeTypes($this->allowedVideoMimeTypes)
+                    ->max(512000),
+            ],
         ]);
 
         $videoPath = $request->file('video')->store('videos', 'public');
@@ -266,10 +316,10 @@ class VideoController extends Controller
     protected function assembleChunks(string $uploadId, string $originalName, int $expectedChunks): string
     {
         $chunkDirectory = $this->getChunkDirectory($uploadId);
-        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        $extension = $this->extractExtension($originalName);
 
-        if ($extension !== 'mp4') {
-            throw new \InvalidArgumentException('Only MP4 uploads are supported.');
+        if (! $this->isAllowedExtension($originalName)) {
+            throw new \InvalidArgumentException($this->unsupportedFormatMessage);
         }
 
         $finalFileName = (string) Str::uuid() . '.' . $extension;
@@ -301,6 +351,22 @@ class VideoController extends Controller
         Storage::disk('local')->deleteDirectory($chunkDirectory);
 
         return $finalPath;
+    }
+
+    protected function extractExtension(string $fileName): string
+    {
+        return strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+    }
+
+    protected function isAllowedExtension(?string $fileName): bool
+    {
+        if ($fileName === null || trim($fileName) === '') {
+            return false;
+        }
+
+        $extension = $this->extractExtension($fileName);
+
+        return $extension !== '' && in_array($extension, $this->allowedVideoExtensions, true);
     }
 
     protected function getChunkDirectory(string $uploadId): string

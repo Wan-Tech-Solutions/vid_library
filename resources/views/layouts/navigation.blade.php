@@ -1,61 +1,69 @@
 <nav x-data="{ open: false }" class="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between h-16 items-center">
-            <!-- Left -->
-            <div class="flex items-center space-x-6">
+        <div class="flex justify-between h-16 items-center gap-4">
+            <!-- Brand + Primary Links -->
+            <div class="flex items-center gap-3">
                 <a href="/" class="text-xl font-bold text-gray-800 dark:text-white">VideoLibrary</a>
 
-                <x-nav-link :href="route('admin.dashboard')" :active="request()->routeIs('admin.dashboard')">
-                    <i class="ri-home-line mr-1"></i> Dashboard
-                </x-nav-link>
-
-                @if (in_array(auth()->user()->role, ['admin', 'superadmin']))
-                    <div class="relative group">
-                        <button
-                            class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
-                            <i class="ri-shield-user-line mr-1"></i> Admin
-                            <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </button>
-
-                        <div
-                            class="absolute z-50 left-0 mt-2 w-48 bg-white dark:bg-gray-800 shadow-lg rounded-md opacity-0 group-hover:opacity-100 invisible group-hover:visible transition-all duration-200">
-                            <a href="{{ route('admin.dashboard') }}"
-                                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                <i class="ri-dashboard-line mr-2"></i> Dashboard
-                            </a>
-                            <a href="{{ route('admin.logs.index') }}"
-                                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                <i class="ri-file-list-3-line mr-2"></i> Activity Logs
-                            </a>
-                            <a href="{{ route('admin.users.index') }}"
-                                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                <i class="ri-user-settings-line mr-2"></i> Admin Users
-                            </a>
-                            <a href="{{ route('account.password.edit') }}"
-                                class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                <i class="ri-lock-password-line mr-2"></i> Change Password
-                            </a>
-                        </div>
-                    </div>
-                @endif
-
-                <button onclick="toggleDarkMode()"
-                    class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-sm text-gray-800 dark:text-white transition">
-                    <i class="ri-contrast-line mr-1"></i> Toggle Theme
+                <button type="button" onclick="toggleDarkMode()"
+                    class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 lg:hidden">
+                    <i class="ri-contrast-line mr-1"></i>
+                    Theme
                 </button>
 
-                <a href="{{ route('landing') }}" target="_blank"
-                    class="inline-flex items-center px-4 py-2 ml-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 shadow-sm">
-                    Home Page
-                </a>
+                <div class="hidden lg:flex items-center gap-4">
+                    <x-nav-link :href="route('admin.dashboard')" :active="request()->routeIs('admin.dashboard')">
+                        <i class="ri-home-line mr-1"></i> Dashboard
+                    </x-nav-link>
+
+                    @if (in_array(auth()->user()->role, ['admin', 'superadmin']))
+                        <div class="relative group">
+                            <button type="button"
+                                class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white">
+                                <i class="ri-shield-user-line mr-1"></i> Admin
+                                <svg class="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            <div
+                                class="absolute z-50 left-0 mt-2 w-52 rounded-md border border-gray-200 bg-white shadow-lg transition-all duration-200 group-hover:visible group-hover:opacity-100 dark:border-gray-700 dark:bg-gray-800 invisible opacity-0">
+                                <a href="{{ route('admin.dashboard') }}"
+                                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">
+                                    <i class="ri-dashboard-line mr-2"></i> Dashboard
+                                </a>
+                                <a href="{{ route('admin.logs.index') }}"
+                                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">
+                                    <i class="ri-file-list-3-line mr-2"></i> Activity Logs
+                                </a>
+                                <a href="{{ route('admin.users.index') }}"
+                                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">
+                                    <i class="ri-user-settings-line mr-2"></i> Admin Users
+                                </a>
+                                <a href="{{ route('account.password.edit') }}"
+                                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700">
+                                    <i class="ri-lock-password-line mr-2"></i> Change Password
+                                </a>
+                            </div>
+                        </div>
+                    @endif
+
+                    <button type="button" onclick="toggleDarkMode()"
+                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
+                        <i class="ri-contrast-line mr-1"></i> Toggle Theme
+                    </button>
+
+                    <a href="{{ route('landing') }}" target="_blank"
+                        class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
+                        Home Page
+                    </a>
+                </div>
             </div>
 
             <!-- Right -->
-            <div class="hidden sm:flex sm:items-center">
-                <div id="navbarCountdown" class="text-sm text-yellow-400 font-semibold mr-4 hidden"></div>
+            <div class="hidden md:flex items-center gap-4">
+                <div id="navbarCountdown" class="hidden text-sm font-semibold text-yellow-400"></div>
 
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
@@ -108,9 +116,31 @@
     <div :class="{ 'block': open, 'hidden': !open }"
         class="hidden sm:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
         <div class="pt-2 pb-3 space-y-1">
-            <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
+            <x-responsive-nav-link :href="route('admin.dashboard')" :active="request()->routeIs('admin.dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+
+            @if (in_array(auth()->user()->role, ['admin', 'superadmin']))
+                <x-responsive-nav-link :href="route('admin.logs.index')" :active="request()->routeIs('admin.logs.index')">
+                    {{ __('Activity Logs') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('admin.users.index')" :active="request()->routeIs('admin.users.*')">
+                    {{ __('Admin Users') }}
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('account.password.edit')" :active="request()->routeIs('account.password.*')">
+                    {{ __('Change Password') }}
+                </x-responsive-nav-link>
+            @endif
+
+            <a href="{{ route('landing') }}" target="_blank"
+                class="block px-4 py-2 text-base font-medium text-gray-700 transition hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800">
+                {{ __('Home Page') }}
+            </a>
+
+            <button type="button" onclick="toggleDarkMode()"
+                class="mx-4 mt-2 block w-full rounded-md border border-gray-300 bg-white px-4 py-2 text-left text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
+                <i class="ri-contrast-line mr-2"></i>{{ __('Toggle Theme') }}
+            </button>
         </div>
 
         <div class="pt-4 pb-1 border-t border-gray-200 dark:border-gray-600">

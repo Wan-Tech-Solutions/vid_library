@@ -1,4 +1,4 @@
-﻿@extends('layouts.landing')
+@extends('layouts.landing')
 
 @section('content')
     @php
@@ -15,23 +15,24 @@
                 alt="" class="w-full h-full object-cover opacity-60">
         </div>
 
-        <div class="relative max-w-6xl mx-auto px-4 py-4 lg:py-8">
-            <div class="grid lg:grid-cols-2 gap-10 items-center">
+        <div class="relative mx-auto max-w-6xl px-4 py-10 sm:py-12 lg:py-16">
+            <div class="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
                 <div class="space-y-6">
-                    <span class="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-white/10 text-sm tracking-wide">
-                        <span class="text-lg">🎬</span> Fitness Video Channel
+                    <span class="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-sm tracking-wide">
+                        <i class="ri-lightbulb-flash-line text-lg" aria-hidden="true"></i>
+                        Fitness Video Channel
                     </span>
-                    <h1 class="text-4xl lg:text-5xl font-bold leading-tight">
+                    <h1 class="text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl">
                         Watch and share impactful tutorials from our best instructors.
                     </h1>
-                    <p class="text-slate-200 text-lg">
+                    <p class="text-base text-slate-200 sm:text-lg">
                         Discover fresh releases, binge timeless favourites, and get inspired by people pushing ideas
-                        forward. Our library updates weekly—there is always something new to explore.
+                        forward. Our library updates weekly - there is always something new to explore.
                     </p>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4 text-sm">
-                    <div class="col-span-2 bg-white/10 rounded-2xl p-5 border border-white/10 backdrop-blur">
+                <div class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                    <div class="sm:col-span-2 bg-white/10 rounded-2xl p-5 border border-white/10 backdrop-blur">
                         <p class="text-xs uppercase tracking-wide text-white/70 mb-2">Library at a glance</p>
                         <div class="flex flex-wrap gap-6">
                             <div>
@@ -51,10 +52,16 @@
                     <div class="bg-white/5 rounded-xl p-4 border border-white/10">
                         <p class="text-xs uppercase text-white/70">Community</p>
                         <p class="text-lg font-semibold mt-1">Featured Categories</p>
-                        <div class="mt-4 flex -space-x-3">
-                            <span class="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center text-lg">🎥</span>
-                            <span class="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center text-lg">📸</span>
-                            <span class="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center text-lg">🎤</span>
+                        <div class="mt-4 flex -space-x-3 text-white">
+                            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-lg">
+                                <i class="ri-run-line" aria-hidden="true"></i>
+                            </span>
+                            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-lg">
+                                <i class="ri-play-circle-line" aria-hidden="true"></i>
+                            </span>
+                            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-lg">
+                                <i class="ri-team-line" aria-hidden="true"></i>
+                            </span>
                         </div>
                     </div>
                     <div class="bg-white/5 rounded-xl p-4 border border-white/10">
@@ -70,15 +77,15 @@
     </section>
 
     {{-- MAIN CONTENT --}}
-    <div class="max-w-6xl mx-auto px-4 py-12 space-y-16">
+    <div class="mx-auto max-w-6xl px-4 py-12 space-y-16 sm:py-16 lg:py-20">
         {{-- Latest Release --}}
         <section class="space-y-6">
-            <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex flex-wrap items-center justify-between gap-4 text-center sm:text-left">
                 <div>
                     <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Latest Release</h2>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">This week’s spotlight from our editorial team.</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">This week's spotlight from our editorial team.</p>
                 </div>
-                <div class="flex flex-wrap gap-2 text-sm">
+                <div class="flex flex-wrap justify-center gap-2 text-sm sm:justify-end">
                     @foreach ($categories as $category)
                         <span
                             class="px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300">
@@ -88,7 +95,7 @@
                 </div>
             </div>
 
-            <div class="grid lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <div class="lg:col-span-2">
                     @if ($latest)
                         @php
@@ -102,7 +109,7 @@
                                         controlslist="nodownload noremoteplayback"
                                         playsinline
                                         data-display-duration>
-                                        <source src="{{ $latestVideo }}" type="video/mp4">
+                                        <source src="{{ $latestVideo }}">
                                     </video>
                                     <span data-video-duration
                                         class="pointer-events-none absolute bottom-3 right-3 rounded bg-black/80 px-3 py-1 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">--:--</span>
@@ -156,7 +163,7 @@
                                             controlslist="nodownload noremoteplayback"
                                             playsinline
                                             data-display-duration>
-                                            <source src="{{ $videoUrl }}" type="video/mp4">
+                                            <source src="{{ $videoUrl }}">
                                         </video>
                                         <span data-video-duration
                                             class="pointer-events-none absolute bottom-2 right-2 rounded bg-black/80 px-2 py-[2px] text-[11px] font-semibold text-white opacity-0 transition group-hover:opacity-100">--:--</span>
@@ -189,7 +196,7 @@
 
         {{-- Library --}}
         <section class="space-y-6">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h2 class="text-2xl font-semibold text-slate-900 dark:text-white">Library</h2>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Browse the full catalogue.</p>
@@ -210,7 +217,7 @@
                                     controlslist="nodownload noremoteplayback"
                                     playsinline
                                     data-display-duration>
-                                    <source src="{{ $videoUrl }}" type="video/mp4">
+                                    <source src="{{ $videoUrl }}">
                                 </video>
                                 <span data-video-duration
                                     class="pointer-events-none absolute bottom-3 right-3 rounded bg-black/80 px-3 py-1 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">--:--</span>

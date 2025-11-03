@@ -1,5 +1,27 @@
 ﻿@extends('layouts.app')
 
+@push('styles')
+    <style>
+        .video-mobile-grid {
+            display: none;
+        }
+
+        .video-table-wrap {
+            display: block;
+        }
+
+        @media (max-width: 900px) {
+            .video-mobile-grid {
+                display: block;
+            }
+
+            .video-table-wrap {
+                display: none;
+            }
+        }
+    </style>
+@endpush
+
 @section('content')
     <div class="max-w-7xl mx-auto px-6 py-10">
         <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
@@ -33,9 +55,89 @@
             </div>
         @endif
 
-        {{-- Video Table --}}
-        <div class="overflow-x-auto bg-white dark:bg-gray-900 rounded shadow-lg">
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+        {{-- Mobile Cards --}}
+        <div class="video-mobile-grid space-y-4">
+            @forelse ($videos as $video)
+                @php
+                    $videoUrl = media_url($video->video_path);
+                @endphp
+                <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                    <div class="flex flex-col gap-4">
+                        <div class="relative overflow-hidden rounded-xl bg-gray-100 dark:bg-gray-800" data-video-container>
+                            @if ($videoUrl)
+                                <video controls preload="metadata"
+                                    class="w-full aspect-video rounded-xl bg-black object-cover"
+                                    controlslist="nodownload noremoteplayback"
+                                    playsinline
+                                    data-display-duration>
+                                    <source src="{{ $videoUrl }}">
+                                </video>
+                                <span data-video-duration
+                                    class="pointer-events-none absolute bottom-3 right-3 rounded bg-black/80 px-3 py-1 text-xs font-semibold text-white">--:--</span>
+                            @else
+                                <div class="flex aspect-video items-center justify-center text-xs text-gray-500 dark:text-gray-300">
+                                    No video available
+                                </div>
+                            @endif
+                        </div>
+
+                        <div class="space-y-2">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ $video->title }}</h3>
+                            <div class="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                                <span
+                                    class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium {{ $video->is_published ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200' }}">
+                                    {{ $video->is_published ? 'Published' : 'Hidden' }}
+                                </span>
+                                <span>{{ $video->created_at->format('M d, Y') }}</span>
+                            </div>
+                            @if ($video->link_url)
+                                <div class="break-words text-sm">
+                                    <span class="font-semibold text-gray-700 dark:text-gray-300">Link:</span>
+                                    <a href="{{ $video->link_url }}" target="_blank" rel="noopener"
+                                        class="text-blue-600 underline hover:text-blue-500 dark:text-blue-300">
+                                        {{ $video->link_url }}
+                                    </a>
+                                </div>
+                            @endif
+                            <div class="flex flex-wrap gap-2">
+                                <a href="{{ route('videos.edit', $video->id) }}"
+                                    class="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800">
+                                    <i class="ri-edit-box-line text-base"></i>
+                                    Edit
+                                </a>
+                                <form action="{{ route('videos.destroy', $video->id) }}" method="POST"
+                                    class="inline-flex"
+                                    onsubmit="return confirm('Are you sure you want to delete this video?');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit"
+                                        class="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50 dark:border-red-600/40 dark:text-red-400 dark:hover:bg-red-500/10">
+                                        <i class="ri-delete-bin-6-line text-base"></i>
+                                        Delete
+                                    </button>
+                                </form>
+                                <form action="{{ route('videos.togglePublish', $video->id) }}" method="POST" class="inline-flex">
+                                    @csrf
+                                    <button type="submit"
+                                        class="inline-flex items-center gap-1 rounded-md border border-blue-200 px-3 py-2 text-sm font-medium text-blue-600 transition hover:bg-blue-50 dark:border-blue-600/40 dark:text-blue-300 dark:hover:bg-blue-500/10">
+                                        <i class="ri-repeat-line text-base"></i>
+                                        {{ $video->is_published ? 'Unpublish' : 'Publish' }}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @empty
+                <div class="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-gray-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                    No videos found.
+                </div>
+            @endforelse
+        </div>
+
+        {{-- Desktop Table --}}
+        <div class="video-table-wrap overflow-x-auto rounded shadow-lg bg-white dark:bg-gray-900">
+            <table class="min-w-[960px] w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
                 <thead class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 uppercase">
                     <tr>
                         <th>Preview</th>
@@ -60,7 +162,7 @@
                                             controlslist="nodownload noremoteplayback"
                                             playsinline
                                             data-display-duration>
-                                            <source src="{{ $videoUrl }}" type="video/mp4">
+                                            <source src="{{ $videoUrl }}">
                                         </video>
                                         <span data-video-duration
                                             class="pointer-events-none absolute bottom-2 right-2 rounded bg-black/80 px-2 py-1 text-[10px] font-semibold text-white opacity-0 transition group-hover:opacity-100">--:--</span>
@@ -73,8 +175,9 @@
                                 </div>
                             </td>
 
-                            <td class="px-4 py-3 max-w-[240px]">
-                                <div class="break-words text-sm font-medium text-gray-900 dark:text-white">
+                            <td class="px-4 py-3 w-[260px]">
+                                <div class="block max-w-[260px] truncate text-sm font-medium text-gray-900 dark:text-white"
+                                    title="{{ $video->title }}">
                                     {{ $video->title }}
                                 </div>
                             </td>
@@ -90,9 +193,10 @@
                             @php
                                 $shareUrl = route('landing', ['v' => $video->id]);
                             @endphp
-                            <td class="px-4 py-3">
+                            <td class="px-4 py-3 w-[280px]">
                                 <a href="{{ $shareUrl }}" target="_blank" rel="noopener"
-                                    class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-300 break-all">
+                                    class="block max-w-[280px] truncate text-xs font-medium text-blue-600 hover:underline dark:text-blue-300"
+                                    title="{{ $shareUrl }}">
                                     {{ $shareUrl }}
                                 </a>
                             </td>
@@ -213,5 +317,3 @@
     </script>
 @endpush
 @endsection
-
-

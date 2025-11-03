@@ -21,17 +21,21 @@
     @if (file_exists(public_path('build/manifest.json')))
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     @else
+        @php
+            $baseUrl = rtrim(request()->getBaseUrl(), '/');
+        @endphp
         @if (file_exists(public_path('css/app.css')))
-            <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+            <link rel="stylesheet" href="{{ $baseUrl }}/css/app.css">
         @endif
         @if (file_exists(public_path('js/app.js')))
-            <script src="{{ asset('js/app.js') }}" defer></script>
+            <script src="{{ $baseUrl }}/js/app.js" defer></script>
         @endif
     @endif
     
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 
+    @stack('styles')
 </head>
 
 <body class="font-sans antialiased">
@@ -97,8 +101,8 @@
     <!-- End of Expiry Pop Up -->
 
     <div id="successToast"
-        class="hidden fixed top-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-500">
-        ✅ User updated successfully!
+        class="hidden fixed top-4 left-1/2 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 bg-green-500 text-white px-5 py-3 rounded-lg shadow-lg z-50 transition-opacity duration-500 sm:left-auto sm:right-6 sm:translate-x-0">
+        Success! User updated successfully!
     </div>
 
     <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
@@ -114,8 +118,8 @@
         @endisset
 
         <!-- Page Content -->
-        <main class="py-4">
-            <div class="container">
+        <main class="py-4 sm:py-6 lg:py-8">
+            <div class="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
                 @yield('content')
             </div>
         </main>
@@ -222,4 +226,3 @@
 </body>
 
 </html>
-
