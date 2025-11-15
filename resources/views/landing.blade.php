@@ -150,7 +150,7 @@
                             A quick look at other videos trending this week.
                         </p>
                         <div class="mt-4 space-y-4">
-                        @forelse ($others->take(4) as $video)
+                        @forelse ($others->take(2) as $video)
                             @php
                                 $videoUrl = media_url($video->video_path);
                             @endphp
@@ -204,7 +204,7 @@
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                @foreach ($others->skip(4) as $video)
+                @foreach ($others->skip(3) as $video)
                     @php
                         $videoUrl = media_url($video->video_path);
                     @endphp

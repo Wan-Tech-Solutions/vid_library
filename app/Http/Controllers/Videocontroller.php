@@ -231,6 +231,20 @@ class VideoController extends Controller
         Storage::disk('local')->makeDirectory($chunkDirectory);
 
         $chunkFileName = $this->formatChunkName($chunkIndex);
+        $chunkPath = $chunkDirectory . '/' . $chunkFileName;
+
+        if (Storage::disk('local')->exists($chunkPath)) {
+            $existingSize = Storage::disk('local')->size($chunkPath);
+            if ($existingSize === $request->file('chunk')->getSize()) {
+                return response()->json([
+                    'success' => true,
+                    'received_chunk' => $chunkIndex,
+                    'next_chunk' => $chunkIndex + 1,
+                    'skipped' => true,
+                ]);
+            }
+        }
+
         Storage::disk('local')->putFileAs(
             $chunkDirectory,
             $request->file('chunk'),
@@ -241,6 +255,7 @@ class VideoController extends Controller
             'success' => true,
             'received_chunk' => $chunkIndex,
             'next_chunk' => $chunkIndex + 1,
+            'skipped' => false,
         ]);
     }
 
@@ -267,16 +282,38 @@ class VideoController extends Controller
         if (! Storage::disk('local')->exists($chunkDirectory)) {
             return response()->json([
                 'uploaded_chunks' => [],
+                'contiguous_count' => 0,
+                'uploaded_bytes' => 0,
             ]);
         }
 
         $files = collect(Storage::disk('local')->files($chunkDirectory))
-            ->map(fn ($path) => (int) basename($path))
-            ->sort()
+            ->map(function ($path) {
+                return [
+                    'index' => (int) basename($path),
+                    'size' => Storage::disk('local')->size($path),
+                ];
+            })
+            ->sortBy('index')
             ->values();
 
+        $contiguousCount = 0;
+        foreach ($files as $file) {
+            if ($file['index'] === $contiguousCount) {
+                $contiguousCount++;
+            } else {
+                break;
+            }
+        }
+
+        $uploadedBytes = $files
+            ->take($contiguousCount)
+            ->sum('size');
+
         return response()->json([
-            'uploaded_chunks' => $files,
+            'uploaded_chunks' => $files->pluck('index')->values(),
+            'contiguous_count' => $contiguousCount,
+            'uploaded_bytes' => $uploadedBytes,
         ]);
     }
 

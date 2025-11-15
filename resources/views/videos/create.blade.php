@@ -1,5 +1,39 @@
 @extends('layouts.app')
 
+@push('styles')
+    <style>
+        @media (max-width: 640px) {
+            .upload-actions {
+                position: sticky;
+                bottom: 1rem;
+                width: 100%;
+                background: rgba(255, 255, 255, 0.9);
+                padding: 0.75rem;
+                border-radius: 9999px;
+                border: 1px solid rgba(209, 213, 219, 0.9);
+                box-shadow: 0 10px 25px rgba(16, 185, 129, 0.15);
+                backdrop-filter: blur(18px);
+                gap: 0.75rem;
+                z-index: 30;
+            }
+
+            .dark .upload-actions {
+                background: rgba(17, 24, 39, 0.92);
+                border-color: rgba(55, 65, 81, 0.8);
+            }
+
+            .upload-actions button {
+                flex: 1 1 100%;
+            }
+
+            .upload-actions #queueStatus,
+            .upload-actions #networkHint {
+                text-align: center;
+            }
+        }
+    </style>
+@endpush
+
 @section('content')
     <div class="max-w-5xl mx-auto px-4 py-8">
         <div class="bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-xl">
@@ -34,6 +68,7 @@
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Select Video Files (.mp4, .mov, .avi, .mkv, .webm)</label>
                     <input type="file" id="videoInput"
                         accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm"
+                        capture="environment"
                         multiple
                         class="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm focus:ring focus:ring-green-400">
                     <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -50,7 +85,7 @@
 
                 <div id="selectedVideosContainer" class="space-y-6"></div>
 
-                <div class="flex flex-wrap items-center gap-3">
+                <div class="flex flex-wrap items-center gap-3 upload-actions">
                     <button type="button" id="startUploadButton"
                         class="px-5 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 focus:outline-none focus:ring focus:ring-green-400 disabled:opacity-50 disabled:cursor-not-allowed">
                         Upload Selected Videos
@@ -60,7 +95,8 @@
                         disabled>
                         Cancel All Uploads
                     </button>
-                    <span id="queueStatus" class="text-sm text-gray-500 dark:text-gray-400"></span>
+                    <span id="queueStatus" class="text-sm text-gray-500 dark:text-gray-400" aria-live="polite"></span>
+                    <p id="networkHint" class="text-xs text-gray-400 dark:text-gray-500 w-full"></p>
                 </div>
 
                 <div id="uploadSummary" class="hidden">
@@ -78,11 +114,13 @@
     <script src="https://cdn.lordicon.com/lordicon.js"></script>
     <script>
         (() => {
-            const DEFAULT_CHUNK_SIZE = 4 * 1024 * 1024;
-            const MOBILE_CHUNK_SIZE = 2 * 1024 * 1024;
-            const CHUNK_SIZE = window.matchMedia("(max-width: 640px)").matches ? MOBILE_CHUNK_SIZE : DEFAULT_CHUNK_SIZE;
-            const MAX_PARALLEL_UPLOADS = 2;
+            const runtimeSettings = determineRuntimeSettings();
+            const CHUNK_SIZE = runtimeSettings.chunkSize;
+            const MAX_PARALLEL_UPLOADS = runtimeSettings.parallelUploads;
+            const CHUNK_CONCURRENCY = runtimeSettings.chunkConcurrency;
             const MAX_CHUNK_RETRIES = 3;
+            const STATUS_PLACEHOLDER = '__UPLOAD_ID__';
+            const STORAGE_KEY = 'video-uploader:v1';
             const SUPPORTED_MIME_TYPES = new Set([
                 'video/mp4',
                 'video/quicktime',
@@ -115,20 +153,32 @@
             const summary = document.getElementById('uploadSummary');
             const summaryList = document.getElementById('summaryList');
             const queueStatus = document.getElementById('queueStatus');
+            const networkHint = document.getElementById('networkHint');
             const csrfToken = form.querySelector('input[name="_token"]').value;
+            const persistence = createPersistence(STORAGE_KEY);
 
             const routes = {
                 chunk: @json(route('videos.uploadChunk')),
                 finalize: @json(route('videos.store')),
                 cancel: @json(route('videos.cancelUpload')),
                 index: @json(route('videos.index')),
+                status: @json(route('videos.uploadStatus', ['uploadId' => '__UPLOAD_ID__'])),
             };
+            const statusUrlFor = (uploadId) => routes.status.replace(
+                STATUS_PLACEHOLDER,
+                encodeURIComponent(uploadId || '')
+            );
 
             const state = {
                 entries: new Map(),
                 isUploading: false,
+                runtime: runtimeSettings,
             };
             let wakeLock = null;
+
+            if (networkHint && runtimeSettings.hint) {
+                networkHint.textContent = runtimeSettings.hint;
+            }
 
             form.addEventListener('submit', (event) => event.preventDefault());
 
@@ -208,22 +258,40 @@
                     return;
                 }
 
-                const uploadId = generateUploadId();
+                const fingerprint = createFingerprint(file);
+                const cachedSession = persistence.get(fingerprint);
+                const cachedChunkSize =
+                    cachedSession && Number.isFinite(cachedSession.chunkSize) && cachedSession.chunkSize > 0
+                        ? cachedSession.chunkSize
+                        : CHUNK_SIZE;
+                const uploadId =
+                    cachedSession && cachedSession.uploadId ? cachedSession.uploadId : generateUploadId();
+                const totalChunks = Math.max(1, Math.ceil(file.size / cachedChunkSize));
+                const cachedUploadedChunks =
+                    cachedSession && Number.isFinite(cachedSession.uploadedChunks)
+                    ? Math.min(cachedSession.uploadedChunks, totalChunks)
+                    : 0;
 
                 const entry = {
                     uploadId,
                     file,
                     status: 'pending',
-                    uploadedChunks: 0,
-                    totalChunks: Math.max(1, Math.ceil(file.size / CHUNK_SIZE)),
+                    uploadedChunks: cachedUploadedChunks,
+                    totalChunks,
                     cancelRequested: false,
-                    abortController: null,
+                    chunkControllers: new Map(),
+                    partialProgress: new Map(),
+                    pendingCompletion: new Set(),
                     previewUrl: URL.createObjectURL(file),
                     elements: {},
+                    fingerprint,
+                    chunkSize: cachedChunkSize,
+                    needsRemoteSync: Boolean(cachedSession),
                 };
 
-                renderEntry(entry);
                 state.entries.set(uploadId, entry);
+                renderEntry(entry);
+                persistEntry(entry);
             }
 
             function renderEntry(entry) {
@@ -365,6 +433,16 @@
                     statusText,
                 };
 
+                if (entry.needsRemoteSync) {
+                    entry.elements.statusText.textContent = 'Checking uploaded data...';
+                } else if (entry.uploadedChunks > 0) {
+                    const resumePercent = entry.totalChunks
+                        ? Math.min(99, Math.round((entry.uploadedChunks / entry.totalChunks) * 100))
+                        : 0;
+                    updateProgress(entry, resumePercent);
+                    entry.elements.statusText.textContent = `Ready to resume ${resumePercent}%`;
+                }
+
                 if (window.VideoEditorKit) {
                     const editorInstance = window.VideoEditorKit.attach({
                         videoElement: videoEl,
@@ -380,8 +458,11 @@
                             if (previousUrl) {
                                 URL.revokeObjectURL(previousUrl);
                             }
-                            entry.totalChunks = Math.max(1, Math.ceil(newFile.size / CHUNK_SIZE));
+                            entry.totalChunks = Math.max(1, Math.ceil(newFile.size / getChunkSize(entry)));
                             entry.uploadedChunks = 0;
+                            entry.partialProgress = new Map();
+                            entry.pendingCompletion = new Set();
+                            entry.chunkControllers = new Map();
                             entry.elements.nameEl.textContent = entry.file.name;
                             entry.elements.sizeEl.textContent = formatFileSize(entry.file.size);
                             entry.elements.statusText.textContent = 'Edited video ready for upload';
@@ -390,6 +471,7 @@
                                 entry.editor.rehydrate();
                             }
                             refreshUI();
+                            persistEntry(entry);
                         },
                         onStatus: (message, type) => {
                             if (!entry.editor) {
@@ -461,6 +543,7 @@
                         }
 
                         try {
+                            await syncEntryStatus(entry);
                             await uploadEntry(entry);
                             entry.elements.resumeButton.classList.add('hidden');
                         } catch (error) {
@@ -513,66 +596,253 @@
                 }
             }
 
+
+
             async function uploadEntry(entry) {
+
                 entry.status = 'uploading';
+
                 entry.cancelRequested = false;
+
                 entry.elements.cancelButton.classList.remove('hidden');
+
                 entry.elements.resumeButton.classList.add('hidden');
+
                 entry.elements.removeButton.disabled = true;
 
-                const totalChunks = Math.max(1, Math.ceil(entry.file.size / CHUNK_SIZE));
+
+
+                const chunkStride = getChunkSize(entry);
+
+                const totalChunks = Math.max(1, Math.ceil(entry.file.size / chunkStride));
+
                 entry.totalChunks = totalChunks;
+
+                entry.partialProgress = entry.partialProgress instanceof Map ? entry.partialProgress : new Map();
+
+                entry.pendingCompletion =
+
+                    entry.pendingCompletion instanceof Set ? entry.pendingCompletion : new Set();
+
+                entry.chunkControllers =
+
+                    entry.chunkControllers instanceof Map ? entry.chunkControllers : new Map();
+
+
+
                 const cappedUploadedChunks = Math.max(0, Math.min(entry.uploadedChunks, totalChunks));
+
+                entry.uploadedChunks = cappedUploadedChunks;
+
                 const startingPercent = Math.round((cappedUploadedChunks / totalChunks) * 100);
+
                 const initialDisplay = cappedUploadedChunks ? Math.min(startingPercent, 99) : 0;
-                entry.elements.statusText.textContent = cappedUploadedChunks
-                    ? `Resuming ${initialDisplay}%`
-                    : 'Uploading 0%';
+
+                if (entry.elements && entry.elements.statusText) {
+
+                    entry.elements.statusText.textContent = cappedUploadedChunks
+
+                        ? `Resuming ${initialDisplay}%`
+
+                        : 'Preparing upload...';
+
+                }
+
                 updateProgress(entry, initialDisplay);
 
-                for (let index = cappedUploadedChunks; index < totalChunks; index += 1) {
-                    if (entry.cancelRequested) {
-                        throw new Error('cancelled');
+
+
+                if (cappedUploadedChunks >= totalChunks) {
+
+                    await finalizeEntry(entry);
+
+                    entry.status = 'completed';
+
+                    entry.elements.cancelButton.classList.add('hidden');
+
+                    entry.elements.statusText.textContent = 'Upload complete';
+
+                    updateProgress(entry, 100);
+
+                    clearEntry(entry);
+
+                    notifySummary(`${entry.file.name} uploaded successfully.`, 'success');
+
+                    return;
+
+                }
+
+
+
+                let nextChunkIndex = cappedUploadedChunks;
+
+                let encounteredError = null;
+
+                let stopWorkers = false;
+
+                const takeNextChunk = () => {
+
+                    if (nextChunkIndex >= totalChunks) {
+
+                        return null;
+
                     }
 
-                    const start = index * CHUNK_SIZE;
-                    const end = Math.min(start + CHUNK_SIZE, entry.file.size);
-                    const chunk = entry.file.slice(start, end);
-                    const chunkSize = chunk.size;
-                    const isLastChunk = index === totalChunks - 1;
+                    const index = nextChunkIndex;
 
-                    const createChunkFormData = () => {
-                        const formData = new FormData();
-                        formData.append('upload_id', entry.uploadId);
-                        formData.append('chunk_index', index.toString());
-                        formData.append('total_chunks', totalChunks.toString());
-                        formData.append('file_name', entry.file.name);
-                        formData.append('chunk', chunk, `${entry.file.name}.part${index}`);
-                        formData.append('_token', csrfToken);
-                        return formData;
-                    };
+                    nextChunkIndex += 1;
 
-                    await uploadChunkWithRetry(entry, createChunkFormData, index, totalChunks);
-                    entry.uploadedChunks = index + 1;
-                    const uploadedBytes = Math.min(entry.file.size, start + chunkSize);
-                    const percentComplete = Math.round((uploadedBytes / entry.file.size) * 100);
-                    const displayPercent = isLastChunk ? Math.min(percentComplete, 99) : percentComplete;
-                    entry.elements.statusText.textContent = `Uploading ${displayPercent}%`;
-                    updateProgress(entry, displayPercent);
-                    entry.abortController = null;
+                    return index;
+
+                };
+
+
+
+                const worker = async () => {
+
+                    while (true) {
+
+                        if (entry.cancelRequested) {
+
+                            throw new Error('cancelled');
+
+                        }
+
+
+
+                        if (stopWorkers) {
+
+                            break;
+
+                        }
+
+
+
+                        const index = takeNextChunk();
+
+                        if (index === null) {
+
+                            break;
+
+                        }
+
+
+
+                        const start = index * chunkStride;
+
+                        const end = Math.min(start + chunkStride, entry.file.size);
+
+                        const chunk = entry.file.slice(start, end);
+
+
+
+                        const createChunkFormData = () => {
+
+                            const formData = new FormData();
+
+                            formData.append('upload_id', entry.uploadId);
+
+                            formData.append('chunk_index', index.toString());
+
+                            formData.append('total_chunks', totalChunks.toString());
+
+                            formData.append('file_name', entry.file.name);
+
+                            formData.append('chunk', chunk, `${entry.file.name}.part${index}`);
+
+                            formData.append('_token', csrfToken);
+
+                            return formData;
+
+                        };
+
+
+
+                        try {
+                            await uploadChunkWithRetry(entry, createChunkFormData, index, totalChunks, chunk.size);
+                        } catch (error) {
+                            stopWorkers = true;
+                            throw error;
+                        }
+
+                        registerChunkCompletion(entry, index);
+
+                    }
+
+                };
+
+
+
+                const workers = [];
+
+                const maxWorkers = Math.max(
+
+                    1,
+
+                    Math.min(CHUNK_CONCURRENCY, totalChunks - cappedUploadedChunks)
+
+                );
+
+
+
+                for (let w = 0; w < maxWorkers; w += 1) {
+
+                    workers.push(
+
+                        worker().catch((error) => {
+
+                            if (!encounteredError) {
+
+                                encounteredError = error;
+
+                            }
+
+                            stopWorkers = true;
+
+                        })
+
+                    );
+
                 }
+
+
+
+                await Promise.all(workers);
+
+
 
                 if (entry.cancelRequested) {
+
                     throw new Error('cancelled');
+
                 }
+
+
+
+                if (encounteredError) {
+
+                    throw encounteredError;
+
+                }
+
+
 
                 await finalizeEntry(entry);
 
+
+
                 entry.status = 'completed';
+
                 entry.elements.cancelButton.classList.add('hidden');
+
                 entry.elements.statusText.textContent = 'Upload complete';
+
                 updateProgress(entry, 100);
+
+                clearEntry(entry);
+
                 notifySummary(`${entry.file.name} uploaded successfully.`, 'success');
+
             }
 
             async function finalizeEntry(entry) {
@@ -602,8 +872,8 @@
             async function cancelEntry(entry) {
                 entry.cancelRequested = true;
 
-                if (entry.abortController) {
-                    entry.abortController.abort();
+                if (entry.chunkControllers instanceof Map && entry.chunkControllers.size) {
+                    abortActiveChunks(entry);
                     return;
                 }
 
@@ -618,10 +888,11 @@
                 entry.elements.statusText.textContent = 'Upload cancelled';
                 updateProgress(entry, 0);
                 await cleanupPartial(entry);
+                refreshLiveProgress(entry);
                 refreshUI();
             }
 
-            function sendChunk(entry, formData, chunkIndex, totalChunks) {
+            function sendChunk(entry, formData, chunkIndex, totalChunks, chunkSize) {
                 return new Promise((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
                     xhr.open('POST', routes.chunk, true);
@@ -633,16 +904,22 @@
                         if (!event.lengthComputable || entry.cancelRequested) {
                             return;
                         }
-                        const baseBytes = chunkIndex * CHUNK_SIZE;
-                        const uploadedBytes = Math.min(entry.file.size, baseBytes + event.loaded);
-                        const percent = Math.round((uploadedBytes / entry.file.size) * 100);
-                        const isLastChunk = chunkIndex === totalChunks - 1;
-                        const cappedPercent = Math.max(1, isLastChunk ? Math.min(percent, 99) : percent);
-                        updateProgress(entry, cappedPercent);
-                        entry.elements.statusText.textContent = `Uploading ${cappedPercent}%`;
+                        recordChunkProgress(entry, chunkIndex, Math.min(event.loaded, chunkSize));
+                    };
+
+                    registerChunkController(entry, chunkIndex, {
+                        abort: () => xhr.abort(),
+                    });
+                    recordChunkProgress(entry, chunkIndex, 0);
+
+                    const cleanup = () => {
+                        releaseChunkController(entry, chunkIndex);
+                        clearChunkProgress(entry, chunkIndex);
+                        refreshLiveProgress(entry);
                     };
 
                     xhr.onload = () => {
+                        cleanup();
                         if (xhr.status >= 200 && xhr.status < 300) {
                             resolve();
                         } else {
@@ -650,22 +927,32 @@
                         }
                     };
 
-                    xhr.onerror = () => reject(new Error('Network error'));
-                    xhr.onabort = () => reject(new Error('cancelled'));
-
-                    entry.abortController = {
-                        abort: () => xhr.abort(),
+                    xhr.onerror = () => {
+                        cleanup();
+                        reject(new Error('Network error'));
+                    };
+                    xhr.onabort = () => {
+                        cleanup();
+                        reject(new Error('cancelled'));
                     };
 
                     xhr.send(formData);
                 });
             }
 
-            async function uploadChunkWithRetry(entry, formDataFactory, chunkIndex, totalChunks, attempt = 1) {
+            async function uploadChunkWithRetry(
+                entry,
+                formDataFactory,
+                chunkIndex,
+                totalChunks,
+                chunkSize,
+                attempt = 1
+            ) {
                 try {
-                    await sendChunk(entry, formDataFactory(), chunkIndex, totalChunks);
+                    await sendChunk(entry, formDataFactory(), chunkIndex, totalChunks, chunkSize);
                 } catch (error) {
-                    entry.abortController = null;
+                    releaseChunkController(entry, chunkIndex);
+                    clearChunkProgress(entry, chunkIndex);
 
                     if (entry.cancelRequested) {
                         throw error;
@@ -685,7 +972,14 @@
                         );
                     }
                     await delay(waitMs);
-                    return uploadChunkWithRetry(entry, formDataFactory, chunkIndex, totalChunks, nextAttempt);
+                    return uploadChunkWithRetry(
+                        entry,
+                        formDataFactory,
+                        chunkIndex,
+                        totalChunks,
+                        chunkSize,
+                        nextAttempt
+                    );
                 }
             }
 
@@ -705,6 +999,8 @@
                     });
                 } catch (error) {
                     console.warn('Unable to clean up upload', error);
+                } finally {
+                    clearEntry(entry);
                 }
             }
 
@@ -776,6 +1072,290 @@
                 summary.classList.remove('hidden');
                 summaryList.appendChild(item);
             }
+
+            function registerChunkCompletion(entry, chunkIndex) {
+                if (!(entry.pendingCompletion instanceof Set)) {
+                    entry.pendingCompletion = new Set();
+                }
+                entry.pendingCompletion.add(chunkIndex);
+                let advanced = false;
+                while (entry.pendingCompletion.has(entry.uploadedChunks)) {
+                    entry.pendingCompletion.delete(entry.uploadedChunks);
+                    entry.uploadedChunks += 1;
+                    advanced = true;
+                }
+                if (advanced) {
+                    persistEntry(entry);
+                }
+                refreshLiveProgress(entry);
+            }
+
+            function recordChunkProgress(entry, chunkIndex, loaded) {
+                if (!(entry.partialProgress instanceof Map)) {
+                    entry.partialProgress = new Map();
+                }
+                entry.partialProgress.set(chunkIndex, Math.max(0, loaded || 0));
+                refreshLiveProgress(entry);
+            }
+
+            function clearChunkProgress(entry, chunkIndex) {
+                if (entry.partialProgress instanceof Map) {
+                    entry.partialProgress.delete(chunkIndex);
+                }
+            }
+
+            function refreshLiveProgress(entry) {
+                if (!entry.elements || !entry.elements.progressBar || !entry.file) {
+                    return;
+                }
+                const chunkStride = getChunkSize(entry);
+                const contiguousBytes = Math.min(entry.file.size, entry.uploadedChunks * chunkStride);
+                let inflight = 0;
+                if (entry.partialProgress instanceof Map) {
+                    entry.partialProgress.forEach((value) => {
+                        inflight += value || 0;
+                    });
+                }
+                const totalBytes = Math.min(entry.file.size, contiguousBytes + inflight);
+                const percent = entry.file.size ? Math.round((totalBytes / entry.file.size) * 100) : 0;
+                const display = Math.max(1, Math.min(percent, 99));
+                if (entry.status === 'completed') {
+                    updateProgress(entry, 100);
+                    return;
+                }
+                updateProgress(entry, display);
+                if (entry.elements.statusText) {
+                    entry.elements.statusText.textContent =
+                        entry.uploadedChunks >= entry.totalChunks
+                            ? 'Finalising...'
+                            : `Uploading ${display}%`;
+                }
+            }
+
+            function registerChunkController(entry, chunkIndex, controller) {
+                if (!(entry.chunkControllers instanceof Map)) {
+                    entry.chunkControllers = new Map();
+                }
+                entry.chunkControllers.set(chunkIndex, controller);
+            }
+
+            function releaseChunkController(entry, chunkIndex) {
+                if (entry.chunkControllers instanceof Map) {
+                    entry.chunkControllers.delete(chunkIndex);
+                }
+            }
+
+            function abortActiveChunks(entry) {
+                if (!(entry.chunkControllers instanceof Map)) {
+                    return;
+                }
+                entry.chunkControllers.forEach((controller) => {
+                    try {
+                        controller.abort();
+                    } catch (error) {
+                        // ignore
+                    }
+                });
+                entry.chunkControllers.clear();
+            }
+
+            function getChunkSize(entry) {
+                if (entry && Number.isFinite(entry.chunkSize) && entry.chunkSize > 0) {
+                    return entry.chunkSize;
+                }
+                return CHUNK_SIZE;
+            }
+
+            function createFingerprint(file) {
+                if (!file) {
+                    return '';
+                }
+                return [file.name || 'unknown', file.size || 0, file.lastModified || 0].join(':');
+            }
+
+            function persistEntry(entry) {
+                if (!entry || !entry.fingerprint) {
+                    return;
+                }
+                persistence.remember(entry.fingerprint, {
+                    uploadId: entry.uploadId,
+                    chunkSize: getChunkSize(entry),
+                    totalChunks: entry.totalChunks,
+                    uploadedChunks: entry.uploadedChunks || 0,
+                });
+            }
+
+            function clearEntry(entry) {
+                if (!entry) {
+                    return;
+                }
+                if (entry.chunkControllers instanceof Map) {
+                    entry.chunkControllers.clear();
+                }
+                if (entry.partialProgress instanceof Map) {
+                    entry.partialProgress.clear();
+                }
+                if (entry.pendingCompletion instanceof Set) {
+                    entry.pendingCompletion.clear();
+                }
+                if (entry.fingerprint) {
+                    persistence.forget(entry.fingerprint);
+                }
+            }
+
+            async function syncEntryStatus(entry) {
+                if (!entry || !entry.needsRemoteSync || !entry.uploadId) {
+                    return;
+                }
+
+                if (entry.elements && entry.elements.statusText) {
+                    entry.elements.statusText.textContent = 'Checking uploaded data...';
+                }
+
+                try {
+                    const response = await fetch(statusUrlFor(entry.uploadId), {
+                        method: 'GET',
+                        headers: {
+                            Accept: 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        credentials: 'same-origin',
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Status lookup failed');
+                    }
+
+                    const payload = await response.json();
+                    const contiguous = Number(payload && payload.contiguous_count) || 0;
+                    const uploadedBytes =
+                        Number(payload && payload.uploaded_bytes) || contiguous * getChunkSize(entry);
+
+                    if (contiguous > 0) {
+                        entry.uploadedChunks = Math.min(contiguous, entry.totalChunks);
+                        const percent = entry.file && entry.file.size
+                            ? Math.min(99, Math.round((uploadedBytes / entry.file.size) * 100))
+                            : Math.min(99, Math.round((entry.uploadedChunks / entry.totalChunks) * 100));
+                        updateProgress(entry, percent);
+                        if (entry.elements && entry.elements.statusText) {
+                            entry.elements.statusText.textContent = `Resuming ${percent}%`;
+                        }
+                    } else if (entry.elements && entry.elements.statusText) {
+                        entry.elements.statusText.textContent = 'Queued for upload';
+                        updateProgress(entry, 0);
+                    }
+                } catch (error) {
+                    console.warn('Unable to sync upload progress', error);
+                    if (entry.elements && entry.elements.statusText) {
+                        entry.elements.statusText.textContent =
+                            'Unable to read previous progress. Resuming from last saved chunk.';
+                    }
+                } finally {
+                    entry.needsRemoteSync = false;
+                    persistEntry(entry);
+                }
+            }
+
+            function createPersistence(key) {
+                const hasStorage = (() => {
+                    try {
+                        if (typeof window === 'undefined' || !('localStorage' in window)) {
+                            return false;
+                        }
+                        const probeKey = `${key}::probe`;
+                        window.localStorage.setItem(probeKey, '1');
+                        window.localStorage.removeItem(probeKey);
+                        return true;
+                    } catch (error) {
+                        return false;
+                    }
+                })();
+
+                let cache = {};
+                if (hasStorage) {
+                    try {
+                        const raw = window.localStorage.getItem(key);
+                        cache = raw ? JSON.parse(raw) : {};
+                    } catch (error) {
+                        cache = {};
+                    }
+                }
+
+                const flush = () => {
+                    if (!hasStorage) {
+                        return;
+                    }
+                    try {
+                        window.localStorage.setItem(key, JSON.stringify(cache));
+                    } catch (error) {
+                        // ignore quota errors silently
+                    }
+                };
+
+                return {
+                    get: (fingerprint) => cache[fingerprint],
+                    remember: (fingerprint, payload) => {
+                        if (!fingerprint) {
+                            return;
+                        }
+                        cache[fingerprint] = { ...(cache[fingerprint] || {}), ...payload };
+                        flush();
+                    },
+                    forget: (fingerprint) => {
+                        if (!fingerprint || !cache[fingerprint]) {
+                            return;
+                        }
+                        delete cache[fingerprint];
+                        flush();
+                    },
+                };
+            }
+
+        function determineRuntimeSettings() {
+            const DESKTOP = 6 * 1024 * 1024;
+            const MOBILE = 2 * 1024 * 1024;
+            const SLOW = 1 * 1024 * 1024;
+            const connection =
+                navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            const effectiveType = connection && connection.effectiveType ? connection.effectiveType : '';
+            const saveData = Boolean(connection && connection.saveData);
+            const isMobileViewport = window.matchMedia
+                ? window.matchMedia('(max-width: 640px)').matches
+                : false;
+
+            const settings = {
+                chunkSize: DESKTOP,
+                parallelUploads: 2,
+                chunkConcurrency: 3,
+                hint: 'Using accelerated desktop upload settings.',
+            };
+
+            if (saveData || ['slow-2g', '2g'].includes(effectiveType)) {
+                settings.chunkSize = SLOW;
+                settings.parallelUploads = 1;
+                settings.chunkConcurrency = 1;
+                settings.hint = 'Low-bandwidth mode enabled for reliable mobile uploads.';
+                return settings;
+            }
+
+            if (['3g'].includes(effectiveType) || isMobileViewport) {
+                settings.chunkSize = MOBILE;
+                settings.parallelUploads = 1;
+                settings.chunkConcurrency = 1;
+                settings.hint = 'Optimised chunking for mobile connections.';
+                return settings;
+            }
+
+            if (effectiveType === '4g' || effectiveType === 'wifi') {
+                settings.chunkSize = 5 * 1024 * 1024;
+                settings.parallelUploads = 2;
+                settings.chunkConcurrency = 2;
+                settings.hint = 'Balanced upload mode for typical Wi-Fi connections.';
+                return settings;
+            }
+
+            return settings;
+        }
 
             refreshUI();
         })();
